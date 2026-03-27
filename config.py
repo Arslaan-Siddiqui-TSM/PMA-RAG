@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     vector_search_k: int = 20
     bm25_search_k: int = 20
     ensemble_weights: list[float] = [0.5, 0.5]
-    reranker_top_n: int = 15
+    reranker_top_n: int = 10
 
     # Confidence thresholds (calibrated for sigmoid-normalized logit scores)
     # nvidia/llama-nemotron-rerank-1b-v2 returns logits; after sigmoid:

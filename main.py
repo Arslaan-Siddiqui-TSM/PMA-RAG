@@ -298,20 +298,21 @@ async def on_message(message: cl.Message):
     parts: list[str] = [generation] if generation else ["(No response generated)"]
 
     if confidence:
-        parts.append(f"\n\n**Confidence**: {confidence}")
+        parts.append(f"\n**Confidence**: {confidence}")
 
     if citations:
         parts.append("\n**Sources:**")
-        for c in citations:
+        parts.append("| # | Document | Location | Relevance |")
+        parts.append("|---|----------|----------|-----------|")
+        for i, c in enumerate(citations, 1):
             source = c.get("source_file", "Unknown")
             page = c.get("page", "")
             section = c.get("section", "")
-            location = f"page {page}" if page else section if section else ""
+            location = f"Page {page}" if page else section if section else "—"
             score = c.get("relevance_score", 0)
-            loc_str = f" ({location})" if location else ""
-            parts.append(f"- {source}{loc_str} [relevance: {score:.2f}]")
+            parts.append(f"| {i} | {source} | {location} | {score:.2f} |")
 
-    await cl.Message(content="".join(parts)).send()
+    await cl.Message(content="\n".join(parts)).send()
 
 
 @cl.on_stop
