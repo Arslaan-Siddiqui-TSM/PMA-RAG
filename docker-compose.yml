@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:18.1
+    environment:
+      POSTGRES_USER: pma_rag
+      POSTGRES_PASSWORD: pma_rag_dev
+      POSTGRES_DB: pma_rag
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+volumes:
+  pgdata:
