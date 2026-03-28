@@ -6,6 +6,9 @@ from langchain_core.messages import BaseMessage
 
 class RAGState(TypedDict):
     question: str
+    intent: str
+    chat_history: list[BaseMessage]
+    reuse_prior_docs: bool
     doc_type_filter: str | None
     documents: list[Document]
     reranked_documents: list[Document]

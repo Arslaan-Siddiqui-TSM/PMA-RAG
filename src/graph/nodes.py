@@ -1,10 +1,17 @@
 import chainlit as cl
 from langchain_core.documents import Document
+from langchain_core.messages import BaseMessage
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIARerank
 
 from config import settings
 from src.generation.confidence import compute_confidence, normalize_scores
-from src.generation.prompts import RAG_PROMPT
+from src.generation.prompts import (
+    CASUAL_RESPONSES,
+    HELP_RESPONSE,
+    RAG_PROMPT,
+    REFORMULATE_PROMPT,
+)
+from src.graph.intent import classify_intent
 from src.graph.state import RAGState
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.hybrid import build_ensemble_retriever
@@ -22,6 +29,142 @@ def set_retrieval_components(
     _bm25_index = bm25_index
 
 
+# ---------------------------------------------------------------------------
+# Intent classification
+# ---------------------------------------------------------------------------
+
+async def classify_intent_node(state: RAGState) -> dict:
+    question = state["question"]
+    chat_history = state.get("chat_history", [])
+
+    async with cl.Step(
+        name="Classify Intent",
+        type="tool",
+        show_input=True,
+    ) as step:
+        step.input = f"**User message:** {question}"
+
+        intent = await classify_intent(question, chat_history)
+
+        history_len = len(chat_history)
+        step.output = (
+            f"**Detected intent: `{intent}`**\n"
+            f"**Chat history length:** {history_len} messages"
+        )
+
+    return {"intent": intent}
+
+
+# ---------------------------------------------------------------------------
+# Casual / help responses (no retrieval)
+# ---------------------------------------------------------------------------
+
+async def casual_response_node(state: RAGState) -> dict:
+    intent = state.get("intent", "greeting")
+
+    async with cl.Step(
+        name="Casual Response",
+        type="tool",
+        show_input=True,
+    ) as step:
+        step.input = f"**Intent:** {intent}"
+        response = CASUAL_RESPONSES.get(intent, CASUAL_RESPONSES["greeting"])
+        step.output = f"**Response:** {response}"
+
+    return {
+        "generation": response,
+        "confidence": "",
+        "source_citations": [],
+    }
+
+
+async def help_response_node(state: RAGState) -> dict:
+    async with cl.Step(
+        name="Help Response",
+        type="tool",
+        show_input=True,
+    ) as step:
+        step.input = "**Intent:** help"
+        step.output = f"**Response:**\n{HELP_RESPONSE}"
+
+    return {
+        "generation": HELP_RESPONSE,
+        "confidence": "",
+        "source_citations": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Follow-up reformulation
+# ---------------------------------------------------------------------------
+
+async def reformulate_query_node(state: RAGState) -> dict:
+    question = state["question"]
+    chat_history: list[BaseMessage] = state.get("chat_history", [])
+    prior_docs: list[Document] = state.get("reranked_documents", [])
+
+    async with cl.Step(
+        name="Reformulate Follow-up",
+        type="tool",
+        show_input=True,
+    ) as step:
+        step.input = (
+            f"**Original question:** {question}\n"
+            f"**Chat history:** {len(chat_history)} messages\n"
+            f"**Prior reranked docs available:** {len(prior_docs)}"
+        )
+
+        history_lines = []
+        for msg in chat_history[-6:]:
+            role = "User" if msg.type == "human" else "Assistant"
+            history_lines.append(f"{role}: {msg.content[:300]}")
+        history_text = "\n".join(history_lines) or "(no prior conversation)"
+
+        llm = ChatNVIDIA(
+            model=settings.llm_model,
+            temperature=0.0,
+            max_tokens=200,
+        )
+        prompt = REFORMULATE_PROMPT.format(
+            chat_history=history_text,
+            question=question,
+        )
+        response = await llm.ainvoke(prompt)
+        raw = response.content.strip()
+
+        reuse = False
+        reformulated = question
+        if raw.upper().startswith("REUSE:"):
+            reuse = True
+            reformulated = raw[6:].strip()
+        elif raw.upper().startswith("RETRIEVE:"):
+            reuse = False
+            reformulated = raw[9:].strip()
+        else:
+            reformulated = raw
+
+        if not reformulated:
+            reformulated = question
+
+        can_reuse = reuse and len(prior_docs) > 0
+
+        step.output = (
+            f"**Reformulated question:** {reformulated}\n"
+            f"**LLM decision:** {'REUSE prior docs' if reuse else 'RETRIEVE new docs'}\n"
+            f"**Prior docs available:** {len(prior_docs)}\n"
+            f"**Final routing:** {'reuse prior docs → generate' if can_reuse else 'retrieve new docs'}"
+        )
+
+    return {
+        "question": reformulated,
+        "reuse_prior_docs": can_reuse,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Retrieval
+# ---------------------------------------------------------------------------
+
 async def retrieve_node(state: RAGState) -> dict:
     question = state["question"]
     doc_type_filter = state.get("doc_type_filter")
@@ -34,7 +177,8 @@ async def retrieve_node(state: RAGState) -> dict:
         step.input = (
             f"**Query:** {question}\n"
             f"**Filter:** {doc_type_filter or 'None (all documents)'}\n"
-            f"**BM25 index size:** {_bm25_index.document_count if _bm25_index else 0} chunks"
+            f"**BM25 index size:** "
+            f"{_bm25_index.document_count if _bm25_index else 0} chunks"
         )
 
         ensemble = build_ensemble_retriever(
@@ -63,6 +207,10 @@ async def retrieve_node(state: RAGState) -> dict:
 
     return {"documents": documents}
 
+
+# ---------------------------------------------------------------------------
+# Reranking
+# ---------------------------------------------------------------------------
 
 async def rerank_node(state: RAGState) -> dict:
     question = state["question"]
@@ -139,6 +287,10 @@ async def rerank_node(state: RAGState) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Relevance check
+# ---------------------------------------------------------------------------
+
 async def check_relevance_node(state: RAGState) -> dict:
     scores = state.get("relevance_scores", [])
 
@@ -162,17 +314,23 @@ async def check_relevance_node(state: RAGState) -> dict:
         confidence = compute_confidence(scores)
 
         reranked_docs = state.get("reranked_documents", [])
-        will_route = "no_answer" if (not reranked_docs or not scores) else "generate"
+        will_route = (
+            "no_answer" if (not reranked_docs or not scores) else "generate"
+        )
 
+        top_display = f"{max(scores):.4f}" if scores else "N/A"
         step.output = (
             f"**Confidence: {confidence}**\n"
-            f"**Top normalized score: "
-            f"{f'{max(scores):.4f}' if scores else 'N/A'}**\n"
+            f"**Top normalized score: {top_display}**\n"
             f"**Routing to: `{will_route}`**"
         )
 
     return {"confidence": confidence}
 
+
+# ---------------------------------------------------------------------------
+# Generation
+# ---------------------------------------------------------------------------
 
 def _format_context(documents: list[Document]) -> str:
     parts: list[str] = []
@@ -194,7 +352,9 @@ def _build_citations(documents: list[Document]) -> list[dict]:
             {
                 "source_file": doc.metadata.get("source_file", "Unknown"),
                 "page": doc.metadata.get("page", ""),
-                "section": doc.metadata.get("h1", "") or doc.metadata.get("h2", ""),
+                "section": (
+                    doc.metadata.get("h1", "") or doc.metadata.get("h2", "")
+                ),
                 "doc_type": doc.metadata.get("doc_type", ""),
                 "relevance_score": doc.metadata.get("relevance_score", 0.0),
             }
@@ -226,7 +386,9 @@ async def generate_node(state: RAGState) -> dict:
             temperature=0.1,
             max_tokens=1024,
         )
-        response = await chain.ainvoke({"context": context, "question": question})
+        response = await chain.ainvoke(
+            {"context": context, "question": question}
+        )
 
         step.output = f"**LLM Response:**\n{response.content}"
 
@@ -235,6 +397,10 @@ async def generate_node(state: RAGState) -> dict:
         "source_citations": _build_citations(reranked_docs),
     }
 
+
+# ---------------------------------------------------------------------------
+# No answer fallback
+# ---------------------------------------------------------------------------
 
 async def no_answer_node(state: RAGState) -> dict:
     scores = state.get("relevance_scores", [])

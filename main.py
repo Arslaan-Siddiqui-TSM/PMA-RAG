@@ -10,6 +10,7 @@ if sys.platform == "win32":
 import chainlit as cl
 from chainlit.input_widget import Select
 from engineio.payload import Payload
+from langchain_core.messages import AIMessage, HumanMessage
 
 from config import settings
 from src.db.metadata import MetadataStore
@@ -69,6 +70,8 @@ async def on_chat_start():
     ]
     await cl.ChatSettings(chat_settings).send()
     cl.user_session.set("doc_type_filter", None)
+    cl.user_session.set("chat_history", [])
+    cl.user_session.set("prior_reranked_docs", [])
 
     await cl.Message(
         content=(
@@ -276,12 +279,18 @@ async def on_message(message: cl.Message):
         await cl.Message(content="Session not initialized. Please refresh.").send()
         return
 
+    chat_history = cl.user_session.get("chat_history", [])
+    prior_docs = cl.user_session.get("prior_reranked_docs", [])
+
     final_state = await rag_graph.ainvoke(
         {
             "question": content,
+            "intent": "",
+            "chat_history": chat_history,
+            "reuse_prior_docs": False,
             "doc_type_filter": doc_type_filter,
             "documents": [],
-            "reranked_documents": [],
+            "reranked_documents": prior_docs,
             "relevance_scores": [],
             "confidence": "",
             "generation": "",
@@ -295,10 +304,18 @@ async def on_message(message: cl.Message):
     confidence = final_state.get("confidence", "")
     citations = final_state.get("source_citations", [])
 
+    new_reranked = final_state.get("reranked_documents", [])
+    if new_reranked:
+        cl.user_session.set("prior_reranked_docs", new_reranked)
+
+    chat_history.append(HumanMessage(content=content))
+    chat_history.append(AIMessage(content=generation))
+    cl.user_session.set("chat_history", chat_history[-10:])
+
     parts: list[str] = [generation] if generation else ["(No response generated)"]
 
     if confidence:
-        parts.append(f"\n**Confidence**: {confidence}")
+        parts.append(f"\n\n**Confidence**: {confidence}")
 
     if citations:
         parts.append("\n**Sources:**")
