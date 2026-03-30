@@ -11,8 +11,6 @@ RAG_PROMPT = ChatPromptTemplate.from_messages(
             "- If the context does not contain enough information, say: "
             "\"I don't have enough information in the documents to answer "
             'this question."\n'
-            "- Always cite which document and section your answer comes from "
-            "using [Source: filename, page/section] format\n"
             "- Be precise and factual",
         ),
         (

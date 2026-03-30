@@ -16,7 +16,11 @@ LOADER_MAP = {
 }
 
 
-def load_document(file_path: str, doc_type: str | None = None) -> list[Document]:
+def load_document(
+    file_path: str,
+    doc_type: str | None = None,
+    original_name: str | None = None,
+) -> list[Document]:
     path = Path(file_path)
     ext = path.suffix.lower()
 
@@ -30,7 +34,7 @@ def load_document(file_path: str, doc_type: str | None = None) -> list[Document]
     docs = loader.load()
 
     for doc in docs:
-        doc.metadata["source_file"] = path.name
+        doc.metadata["source_file"] = original_name or path.name
         doc.metadata["file_extension"] = ext
         if doc_type:
             doc.metadata["doc_type"] = doc_type

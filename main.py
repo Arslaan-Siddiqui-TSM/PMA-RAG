@@ -139,6 +139,7 @@ async def _handle_file_upload():
                 metadata_store=metadata,
                 vectorstore_manager=vsm,
                 bm25_index=bm25,
+                original_name=file.name,
             )
             if chunks > 0:
                 total_chunks += chunks
@@ -192,6 +193,7 @@ async def _process_attached_files(elements: list) -> None:
                 metadata_store=metadata,
                 vectorstore_manager=vsm,
                 bm25_index=bm25,
+                original_name=el.name,
             )
             if chunks > 0:
                 total_chunks += chunks
@@ -315,19 +317,24 @@ async def on_message(message: cl.Message):
     parts: list[str] = [generation] if generation else ["(No response generated)"]
 
     if confidence:
-        parts.append(f"\n\n**Confidence**: {confidence}")
+        emoji = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}.get(confidence, "⚪")
+        parts.append(f"\n\n{emoji} <b>Confidence</b>: {confidence}")
 
     if citations:
-        parts.append("\n**Sources:**")
-        parts.append("| # | Document | Location | Relevance |")
-        parts.append("|---|----------|----------|-----------|")
+        lines = []
         for i, c in enumerate(citations, 1):
             source = c.get("source_file", "Unknown")
             page = c.get("page", "")
             section = c.get("section", "")
-            location = f"Page {page}" if page else section if section else "—"
+            loc = f"p.{page}" if page else section if section else ""
             score = c.get("relevance_score", 0)
-            parts.append(f"| {i} | {source} | {location} | {score:.2f} |")
+            entry = f"{i}. <b>{source}</b>" + (f" ({loc})" if loc else "") + f" — {score:.0%}"
+            lines.append(entry)
+        parts.append(
+            f"\n<details><summary>📄 <b>{len(citations)} source(s)</b></summary>"
+            f"<br>{'<br>'.join(lines)}"
+            f"</details>"
+        )
 
     await cl.Message(content="\n".join(parts)).send()
 

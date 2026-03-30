@@ -22,6 +22,7 @@ async def ingest_document(
     metadata_store: MetadataStore,
     vectorstore_manager: VectorStoreManager,
     bm25_index: BM25Index,
+    original_name: str | None = None,
 ) -> int:
     """Ingest a single document: load, chunk, embed, store. Returns chunk count."""
     file_hash = compute_file_hash(file_path)
@@ -29,7 +30,7 @@ async def ingest_document(
     if await metadata_store.document_exists(file_hash):
         return 0
 
-    docs = load_document(file_path, doc_type=doc_type)
+    docs = load_document(file_path, doc_type=doc_type, original_name=original_name)
     chunks = chunk_documents(docs)
 
     if not chunks:
@@ -38,7 +39,7 @@ async def ingest_document(
     vectorstore_manager.add_documents(chunks)
     bm25_index.add_documents(chunks)
 
-    file_name = Path(file_path).name
+    file_name = original_name or Path(file_path).name
     await metadata_store.insert_document(
         file_name=file_name,
         doc_type=doc_type,
