@@ -16,10 +16,33 @@ from config import settings
 from src.db.metadata import MetadataStore
 from src.db.postgres import close_pool, get_pool
 from src.graph.builder import compile_graph
-from src.graph.nodes import set_retrieval_components
+from src.graph.chainlit_nodes import (
+    casual_response_node,
+    check_relevance_node,
+    classify_intent_node,
+    generate_node,
+    help_response_node,
+    no_answer_node,
+    reformulate_query_node,
+    rerank_node,
+    retrieve_node,
+    set_retrieval_components,
+)
 from src.ingestion.pipeline import ingest_document
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.vectorstore import VectorStoreManager
+
+CHAINLIT_NODE_MAP = {
+    "classify_intent": classify_intent_node,
+    "casual_response": casual_response_node,
+    "help_response": help_response_node,
+    "reformulate_query": reformulate_query_node,
+    "retrieve": retrieve_node,
+    "rerank": rerank_node,
+    "check_relevance": check_relevance_node,
+    "generate": generate_node,
+    "no_answer": no_answer_node,
+}
 
 Payload.max_decode_packets = 500
 
@@ -54,7 +77,7 @@ async def on_chat_start():
     cl.user_session.set("thread_id", thread_id)
 
     pool = await get_pool()
-    rag_graph = await compile_graph(pool)
+    rag_graph = await compile_graph(pool, node_map=CHAINLIT_NODE_MAP)
     cl.user_session.set("rag_graph", rag_graph)
 
     doc_types = await metadata.get_all_doc_types()

@@ -1,3 +1,5 @@
+from typing import Callable
+
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -21,19 +23,29 @@ from src.graph.nodes import (
 )
 from src.graph.state import RAGState
 
+NodeMap = dict[str, Callable]
 
-def build_graph() -> StateGraph:
+
+def _default_node_map() -> NodeMap:
+    return {
+        "classify_intent": classify_intent_node,
+        "casual_response": casual_response_node,
+        "help_response": help_response_node,
+        "reformulate_query": reformulate_query_node,
+        "retrieve": retrieve_node,
+        "rerank": rerank_node,
+        "check_relevance": check_relevance_node,
+        "generate": generate_node,
+        "no_answer": no_answer_node,
+    }
+
+
+def build_graph(node_map: NodeMap | None = None) -> StateGraph:
+    nodes = node_map or _default_node_map()
     graph = StateGraph(RAGState)
 
-    graph.add_node("classify_intent", classify_intent_node)
-    graph.add_node("casual_response", casual_response_node)
-    graph.add_node("help_response", help_response_node)
-    graph.add_node("reformulate_query", reformulate_query_node)
-    graph.add_node("retrieve", retrieve_node)
-    graph.add_node("rerank", rerank_node)
-    graph.add_node("check_relevance", check_relevance_node)
-    graph.add_node("generate", generate_node)
-    graph.add_node("no_answer", no_answer_node)
+    for name, fn in nodes.items():
+        graph.add_node(name, fn)
 
     graph.add_edge(START, "classify_intent")
     graph.add_conditional_edges("classify_intent", route_after_intent)
@@ -51,8 +63,11 @@ def build_graph() -> StateGraph:
     return graph
 
 
-async def compile_graph(pool: AsyncConnectionPool) -> CompiledStateGraph:
+async def compile_graph(
+    pool: AsyncConnectionPool,
+    node_map: NodeMap | None = None,
+) -> CompiledStateGraph:
     checkpointer = AsyncPostgresSaver(pool)
     await checkpointer.setup()
-    graph = build_graph()
+    graph = build_graph(node_map)
     return graph.compile(checkpointer=checkpointer)

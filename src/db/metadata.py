@@ -63,6 +63,30 @@ class MetadataStore:
             rows = await result.fetchall()
             return [row["doc_type"] for row in rows]
 
+    async def get_document(self, doc_id: int) -> dict | None:
+        async with self._pool.connection() as conn:
+            result = await conn.execute(
+                """
+                SELECT id, file_name, doc_type, file_hash, chunk_count, uploaded_at
+                FROM documents
+                WHERE id = %s
+                """,
+                (doc_id,),
+            )
+            return await result.fetchone()
+
+    async def delete_document(self, doc_id: int) -> dict | None:
+        async with self._pool.connection() as conn:
+            result = await conn.execute(
+                """
+                DELETE FROM documents
+                WHERE id = %s
+                RETURNING id, file_name, doc_type, file_hash, chunk_count, uploaded_at
+                """,
+                (doc_id,),
+            )
+            return await result.fetchone()
+
     async def list_documents(self) -> list[dict]:
         async with self._pool.connection() as conn:
             result = await conn.execute(

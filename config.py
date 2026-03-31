@@ -62,5 +62,9 @@ class Settings(BaseSettings):
     # Connection pool
     postgres_pool_max_size: int = 10
 
+    # API
+    api_rate_limit: str = "10/minute"
+    api_cors_origins: list[str] = ["*"]
+
 
 settings = Settings()

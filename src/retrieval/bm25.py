@@ -41,6 +41,13 @@ class BM25Index:
             docs, k=min(settings.bm25_search_k, len(docs))
         )
 
+    def delete_by_source_file(self, source_file: str) -> None:
+        self._documents = [
+            d for d in self._documents
+            if d.metadata.get("source_file") != source_file
+        ]
+        self._persist()
+
     @property
     def document_count(self) -> int:
         return len(self._documents)

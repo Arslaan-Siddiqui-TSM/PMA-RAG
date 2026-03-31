@@ -30,6 +30,12 @@ class VectorStoreManager:
             search_kwargs["filter"] = {"doc_type": doc_type_filter}
         return self._vectorstore.as_retriever(search_kwargs=search_kwargs)
 
+    def delete_by_source_file(self, source_file: str) -> None:
+        collection = self._chroma_client.get_collection(
+            settings.chroma_collection_name
+        )
+        collection.delete(where={"source_file": source_file})
+
     @property
     def vectorstore(self) -> Chroma:
         return self._vectorstore
