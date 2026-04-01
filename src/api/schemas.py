@@ -83,6 +83,25 @@ class ChatResponse(BaseModel):
     confidence: str
     citations: list[Citation]
     thread_id: str
+    run_id: str
+    search_documents: bool
+    response_style: str
+
+
+# ---------------------------------------------------------------------------
+# Feedback
+# ---------------------------------------------------------------------------
+
+class FeedbackRequest(BaseModel):
+    thread_id: str
+    run_id: str
+    score: float = Field(ge=0.0, le=1.0, description="1.0 = positive, 0.0 = negative")
+    comment: str = ""
+
+
+class FeedbackResponse(BaseModel):
+    id: int
+    status: str = "ok"
 
 
 # ---------------------------------------------------------------------------

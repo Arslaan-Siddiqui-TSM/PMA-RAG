@@ -79,4 +79,6 @@ async def delete_conversation(
             (thread_id,),
         )
 
+    await components.chat_store.delete_thread_data(thread_id)
+
     return ConversationDeleteResponse(thread_id=thread_id)
