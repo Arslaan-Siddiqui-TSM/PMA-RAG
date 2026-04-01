@@ -1,3 +1,5 @@
-Hi there! I'm your project management document assistant. I can help you query, compare, and summarize your project documents (PRDs, BRDs, specs, test plans, and more).
+Hi there. I'm your project management document assistant.
 
-Upload some documents or ask me a question to get started!
+I can help you answer questions, compare documents, and generate brief or detailed summaries from artifacts like PRDs, BRDs, specs, and test plans.
+
+Upload documents or ask a question to get started.

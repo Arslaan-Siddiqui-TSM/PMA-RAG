@@ -25,6 +25,8 @@ router = APIRouter(tags=["chat"])
 async def _build_initial_state(
     question: str,
     doc_type_filter: str | None,
+    source_file_filter: str | None,
+    section_filter: str | None,
     thread_id: str,
     components: AppComponents,
 ) -> dict:
@@ -32,6 +34,8 @@ async def _build_initial_state(
     prior_docs = await components.chat_store.get_reranked_docs(thread_id)
 
     return {
+        "original_question": question,
+        "reformulated_question": question,
         "question": question,
         "intent": "",
         "search_documents": True,
@@ -39,12 +43,22 @@ async def _build_initial_state(
         "chat_history": chat_history,
         "reuse_prior_docs": False,
         "doc_type_filter": doc_type_filter,
+        "source_file_filter": source_file_filter,
+        "section_filter": section_filter,
+        "retrieval_filters": {},
+        "sub_queries": [],
         "documents": [],
         "reranked_documents": prior_docs,
         "relevance_scores": [],
         "confidence": "",
         "generation": "",
         "source_citations": [],
+        "validation_passed": True,
+        "validation_reason": "",
+        "validation_attempts": 0,
+        "retry_with_strict_grounding": False,
+        "force_retrieval_on_retry": False,
+        "retrieval_log": {},
         "messages": [],
     }
 
@@ -69,6 +83,8 @@ def _make_run_config(
     run_id: str,
     question: str,
     doc_type_filter: str | None,
+    source_file_filter: str | None,
+    section_filter: str | None,
     chat_history_length: int,
 ) -> dict:
     return {
@@ -77,6 +93,8 @@ def _make_run_config(
         "metadata": {
             "user_question": question,
             "doc_type_filter": doc_type_filter or "all",
+            "source_file_filter": source_file_filter or "all",
+            "section_filter": section_filter or "all",
             "chat_history_length": chat_history_length,
         },
         "tags": ["api"],
@@ -93,7 +111,12 @@ async def chat(
     thread_id = body.thread_id or str(uuid.uuid4())
     run_id = str(uuid.uuid4())
     initial_state = await _build_initial_state(
-        body.question, body.doc_type_filter, thread_id, components
+        body.question,
+        body.doc_type_filter,
+        body.source_file_filter,
+        body.section_filter,
+        thread_id,
+        components,
     )
 
     config = _make_run_config(
@@ -101,6 +124,8 @@ async def chat(
         run_id,
         body.question,
         body.doc_type_filter,
+        body.source_file_filter,
+        body.section_filter,
         len(initial_state["chat_history"]),
     )
 
@@ -116,6 +141,8 @@ async def chat(
         answer=final_state.get("generation", ""),
         confidence=final_state.get("confidence", ""),
         citations=citations,
+        validation_passed=final_state.get("validation_passed", True),
+        validation_reason=final_state.get("validation_reason", ""),
         thread_id=thread_id,
         run_id=run_id,
         search_documents=final_state.get("search_documents", True),
@@ -133,7 +160,12 @@ async def chat_stream(
     thread_id = body.thread_id or str(uuid.uuid4())
     run_id = str(uuid.uuid4())
     initial_state = await _build_initial_state(
-        body.question, body.doc_type_filter, thread_id, components
+        body.question,
+        body.doc_type_filter,
+        body.source_file_filter,
+        body.section_filter,
+        thread_id,
+        components,
     )
 
     config = _make_run_config(
@@ -141,6 +173,8 @@ async def chat_stream(
         run_id,
         body.question,
         body.doc_type_filter,
+        body.source_file_filter,
+        body.section_filter,
         len(initial_state["chat_history"]),
     )
 
@@ -200,6 +234,8 @@ async def chat_stream(
                 "answer": final_state.get("generation", ""),
                 "confidence": final_state.get("confidence", ""),
                 "citations": citations,
+                "validation_passed": final_state.get("validation_passed", True),
+                "validation_reason": final_state.get("validation_reason", ""),
                 "thread_id": thread_id,
                 "run_id": run_id,
                 "search_documents": final_state.get("search_documents", True),

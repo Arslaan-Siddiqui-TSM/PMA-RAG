@@ -22,12 +22,14 @@ from src.graph.chainlit_nodes import (
     casual_response_node,
     check_relevance_node,
     classify_intent_node,
+    decompose_query_node,
     generate_node,
     help_response_node,
     reformulate_query_node,
     rerank_node,
     retrieve_node,
     set_retrieval_components,
+    validate_answer_node,
 )
 from src.ingestion.pipeline import ingest_document
 from src.retrieval.bm25 import BM25Index
@@ -38,10 +40,12 @@ CHAINLIT_NODE_MAP = {
     "casual_response": casual_response_node,
     "help_response": help_response_node,
     "reformulate_query": reformulate_query_node,
+    "decompose_query": decompose_query_node,
     "retrieve": retrieve_node,
     "rerank": rerank_node,
     "check_relevance": check_relevance_node,
     "generate": generate_node,
+    "validate_answer": validate_answer_node,
 }
 
 Payload.max_decode_packets = 500
@@ -83,12 +87,15 @@ async def _get_components():
 
     if _vectorstore_manager is None:
         _vectorstore_manager = VectorStoreManager()
-    if _bm25_index is None:
-        _bm25_index = BM25Index()
     if _metadata_store is None:
         pool = await get_pool()
+        if _bm25_index is None:
+            _bm25_index = BM25Index(pool)
         _metadata_store = MetadataStore(pool)
         await _metadata_store.setup()
+    elif _bm25_index is None:
+        pool = await get_pool()
+        _bm25_index = BM25Index(pool)
 
     set_retrieval_components(_vectorstore_manager, _bm25_index)
     return _vectorstore_manager, _bm25_index, _metadata_store
@@ -336,6 +343,8 @@ async def on_message(message: cl.Message):
 
     final_state = await rag_graph.ainvoke(
         {
+            "original_question": content,
+            "reformulated_question": content,
             "question": content,
             "intent": "",
             "search_documents": True,
@@ -343,12 +352,22 @@ async def on_message(message: cl.Message):
             "chat_history": chat_history,
             "reuse_prior_docs": False,
             "doc_type_filter": doc_type_filter,
+            "source_file_filter": None,
+            "section_filter": None,
+            "retrieval_filters": {},
+            "sub_queries": [],
             "documents": [],
             "reranked_documents": prior_docs,
             "relevance_scores": [],
             "confidence": "",
             "generation": "",
             "source_citations": [],
+            "validation_passed": True,
+            "validation_reason": "",
+            "validation_attempts": 0,
+            "retry_with_strict_grounding": False,
+            "force_retrieval_on_retry": False,
+            "retrieval_log": {},
             "messages": [],
         },
         config={

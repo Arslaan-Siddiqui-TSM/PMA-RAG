@@ -68,9 +68,18 @@ class ChatRequest(BaseModel):
         default=None,
         description="Optional document type to filter retrieval.",
     )
+    source_file_filter: str | None = Field(
+        default=None,
+        description="Optional source file name to filter retrieval.",
+    )
+    section_filter: str | None = Field(
+        default=None,
+        description="Optional section title to filter retrieval.",
+    )
 
 
 class Citation(BaseModel):
+    chunk_id: str = ""
     source_file: str
     page: str | int
     section: str
@@ -82,6 +91,8 @@ class ChatResponse(BaseModel):
     answer: str
     confidence: str
     citations: list[Citation]
+    validation_passed: bool = True
+    validation_reason: str = ""
     thread_id: str
     run_id: str
     search_documents: bool

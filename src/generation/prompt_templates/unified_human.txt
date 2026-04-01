@@ -1,16 +1,13 @@
-Conversation transcript (may be empty on first message):
----
+<conversation_transcript>
 {chat_transcript}
----
+</conversation_transcript>
 
-Retrieved document excerpts (may be empty if this turn did not search documents):
----
+<retrieved_document_excerpts>
 {context}
----
+</retrieved_document_excerpts>
 
-User’s latest message:
----
+<latest_user_message>
 {question}
----
+</latest_user_message>
 
-Your reply (plain language for the user, no tags or placeholders):
+Respond directly to the user in plain language.

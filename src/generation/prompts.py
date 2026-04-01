@@ -34,13 +34,18 @@ UNIFIED_PROMPT = ChatPromptTemplate.from_messages(
 
 RESPONSE_STYLE_HINTS = {
     "summary": (
-        "The user asked for a summary or overview. Prefer tight sections or bullets; "
-        "lead with what the material is about; synthesize only what the retrieved "
-        "context supports."
+        "The user asked for a summary or overview. If they explicitly asked for a "
+        "brief recap or TL;DR, keep it tight; otherwise default to a comprehensive "
+        "summary. Start with a short executive summary, then provide supporting "
+        "detail in the format that best fits the material. Synthesize only what the "
+        "available evidence supports."
     ),
     "default": (
-        "Answer in clear, scannable prose unless bullets clearly help. "
-        "For document questions, ground answers in retrieved context when present."
+        "Default to a detailed answer unless the user's request is clearly simple "
+        "or explicitly asks for brevity. Choose the format that best fits the "
+        "question. If the user mixes summary with deeper analysis, match the most "
+        "detailed part of the request and remain comprehensive. For document "
+        "questions, ground answers in retrieved context when present."
     ),
 }
 

@@ -797,5 +797,25 @@
       "search_documents": false,
       "response_style": "default"
     }
+  },
+  {
+    "inputs": {
+      "question": "How many projects are there?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "Hi"
+        },
+        {
+          "type": "ai",
+          "content": "Hello! Ask me about your docs."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "needs_rag",
+      "search_documents": true,
+      "response_style": "default"
+    }
   }
 ]

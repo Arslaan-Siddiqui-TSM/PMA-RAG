@@ -1,4 +1,5 @@
 import chromadb
+import asyncio
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStoreRetriever
@@ -21,14 +22,37 @@ class VectorStoreManager:
             embedding_function=self._embeddings,
         )
 
-    def add_documents(self, documents: list[Document]) -> None:
-        self._vectorstore.add_documents(documents)
+    def add_documents(
+        self, documents: list[Document], ids: list[str] | None = None
+    ) -> None:
+        self._vectorstore.add_documents(documents, ids=ids)
 
-    def as_retriever(self, doc_type_filter: str | None = None) -> VectorStoreRetriever:
+    def as_retriever(
+        self,
+        doc_type_filter: str | None = None,
+        filters: dict[str, str] | None = None,
+    ) -> VectorStoreRetriever:
         search_kwargs: dict = {"k": settings.vector_search_k}
-        if doc_type_filter:
-            search_kwargs["filter"] = {"doc_type": doc_type_filter}
+        merged_filter = dict(filters or {})
+        if doc_type_filter and "doc_type" not in merged_filter:
+            merged_filter["doc_type"] = doc_type_filter
+        if merged_filter:
+            search_kwargs["filter"] = merged_filter
         return self._vectorstore.as_retriever(search_kwargs=search_kwargs)
+
+    async def similarity_search(
+        self,
+        query: str,
+        *,
+        k: int | None = None,
+        filters: dict[str, str] | None = None,
+    ) -> list[Document]:
+        return await asyncio.to_thread(
+            self._vectorstore.similarity_search,
+            query,
+            k=k or settings.vector_search_k,
+            filter=filters or None,
+        )
 
     def delete_by_source_file(self, source_file: str) -> None:
         collection = self._chroma_client.get_collection(

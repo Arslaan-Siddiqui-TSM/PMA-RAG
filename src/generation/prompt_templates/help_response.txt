@@ -1,19 +1,22 @@
-Here's what I can do:
+I can help you work through your uploaded project documents in either a brief or detailed way.
 
-**Document queries**
-Ask questions about your uploaded documents. Example: *"What are the functional requirements?"*
+**Ask document questions**
+Examples: *"What are the functional requirements?"* or *"Who owns the API integration workstream?"*
 
-**Follow-up questions**
-Ask follow-ups and I'll use our conversation context. Example: *"Tell me more about that"* or *"What about section 3?"*
+**Ask follow-up questions**
+Examples: *"Tell me more about that"*, *"What about section 3?"*, or *"Explain that in more detail"*
 
-**Compare documents**
-Compare information across different document types. Example: *"Compare the BRD and PRD requirements"*
+**Compare documents or versions**
+Example: *"Compare the BRD and PRD requirements"* or *"How does v2 differ from v1?"*
 
 **Summarize documents**
-Get summaries of specific documents or types. Example: *"Summarize the test plan"*
+Example: *"Summarize the test plan"* or *"Give me a quick overview of the BRD"*
+
+**Focus the answer**
+You can ask for a *brief answer*, a *detailed explanation*, a *step-by-step walkthrough*, or a *high-level recap*.
 
 **Upload documents**
-Use the file upload button or type `/upload` to add new documents (PDF, DOCX, or Markdown).
+Use the file upload button or type `/upload` to add documents such as PDF, DOCX, or Markdown files.
 
-**Filter by type**
-Use the settings panel to filter queries by document type.
+**Filter by document type**
+Use the settings panel if you want to narrow results to a specific document type.

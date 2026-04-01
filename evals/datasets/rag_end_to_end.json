@@ -218,5 +218,445 @@
       "expected_key_facts": ["timelines", "PRD", "project plan"],
       "expected_doc_types": ["PRD"]
     }
+  },
+  {
+    "inputs": {
+      "question": "What assumptions are listed in the BRD?",
+      "doc_type_filter": "BRD"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["assumptions"],
+      "expected_doc_types": ["BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize the technical spec in 5 bullets",
+      "doc_type_filter": "Technical Spec"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["technical spec", "summary"],
+      "expected_doc_types": ["Technical Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What dependencies are mentioned for deployment?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["dependencies", "deployment"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare authentication requirements between PRD and technical spec",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["authentication", "requirements"],
+      "expected_doc_types": ["PRD", "Technical Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are the acceptance criteria for checkout?",
+      "doc_type_filter": "PRD"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["acceptance criteria", "checkout"],
+      "expected_doc_types": ["PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Give me a high-level overview of the functional spec",
+      "doc_type_filter": "Functional Spec"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["functional spec", "overview"],
+      "expected_doc_types": ["Functional Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What risks are still open in the test plan?",
+      "doc_type_filter": "Test Plan"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["risks", "open"],
+      "expected_doc_types": ["Test Plan"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare scope boundaries in BRD vs PRD",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["scope", "boundaries"],
+      "expected_doc_types": ["BRD", "PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What integrations are called out in the technical spec?",
+      "doc_type_filter": "Technical Spec"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["integrations"],
+      "expected_doc_types": ["Technical Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize key milestones from the PRD",
+      "doc_type_filter": "PRD"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["milestones"],
+      "expected_doc_types": ["PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are the known constraints for performance testing?",
+      "doc_type_filter": "Test Plan"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["constraints", "performance testing"],
+      "expected_doc_types": ["Test Plan"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare non-functional requirements across PRD and Non-Functional Spec",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["non-functional requirements"],
+      "expected_doc_types": ["PRD", "Non-Functional Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Who owns each major deliverable?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["owners", "deliverable"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "Give me an overview of the use case document",
+      "doc_type_filter": "Use Case"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["use case", "overview"],
+      "expected_doc_types": ["Use Case"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What environments are defined for testing?",
+      "doc_type_filter": "Test Plan"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["environments", "testing"],
+      "expected_doc_types": ["Test Plan"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare API requirements and API test cases",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["API", "requirements", "test cases"],
+      "expected_doc_types": ["Technical Spec", "Test Plan"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What metrics define success in the BRD?",
+      "doc_type_filter": "BRD"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["metrics", "success"],
+      "expected_doc_types": ["BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize all risks and mitigations in the BRD",
+      "doc_type_filter": "BRD"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["risks", "mitigations"],
+      "expected_doc_types": ["BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What edge cases are identified for login?",
+      "doc_type_filter": "Test Plan"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["edge cases", "login"],
+      "expected_doc_types": ["Test Plan"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare stakeholder lists between BRD and PRD",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["stakeholders"],
+      "expected_doc_types": ["BRD", "PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What rollout phases are documented?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["rollout", "phases"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize functional requirements related to reporting",
+      "doc_type_filter": "PRD"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["functional requirements", "reporting"],
+      "expected_doc_types": ["PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are the SLA or latency targets?",
+      "doc_type_filter": "Non-Functional Spec"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["SLA", "latency"],
+      "expected_doc_types": ["Non-Functional Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare the testing scope with product scope",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["testing scope", "product scope"],
+      "expected_doc_types": ["Test Plan", "PRD", "BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What dependencies block release readiness?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["dependencies", "release readiness"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "Give me a concise BRD summary",
+      "doc_type_filter": "BRD"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["BRD", "summary"],
+      "expected_doc_types": ["BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "How does data retention differ between spec versions?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["data retention", "differ"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "What user personas are referenced in the PRD?",
+      "doc_type_filter": "PRD"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["user personas"],
+      "expected_doc_types": ["PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize test coverage for payment workflows",
+      "doc_type_filter": "Test Plan"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["test coverage", "payment"],
+      "expected_doc_types": ["Test Plan"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare open issues between BRD and technical spec",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["open issues"],
+      "expected_doc_types": ["BRD", "Technical Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What compliance requirements are listed?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["compliance requirements"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize assumptions and constraints from PRD",
+      "doc_type_filter": "PRD"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["assumptions", "constraints"],
+      "expected_doc_types": ["PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare login NFRs in PRD vs Non-Functional Spec",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["login", "NFR"],
+      "expected_doc_types": ["PRD", "Non-Functional Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What unresolved questions remain in the technical spec?",
+      "doc_type_filter": "Technical Spec"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["unresolved questions"],
+      "expected_doc_types": ["Technical Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Provide a short summary of the Non-Functional Spec",
+      "doc_type_filter": "Non-Functional Spec"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["non-functional spec", "summary"],
+      "expected_doc_types": ["Non-Functional Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare defect handling in test plan and BRD",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["defect handling"],
+      "expected_doc_types": ["Test Plan", "BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are release entry and exit criteria?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["entry criteria", "exit criteria"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize user journey highlights from use case docs",
+      "doc_type_filter": "Use Case"
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["user journey"],
+      "expected_doc_types": ["Use Case"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare architecture diagrams references between BRD and technical spec",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["architecture diagrams"],
+      "expected_doc_types": ["BRD", "Technical Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "How many projects are there?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["enough information"],
+      "expected_doc_types": []
+    }
   }
 ]

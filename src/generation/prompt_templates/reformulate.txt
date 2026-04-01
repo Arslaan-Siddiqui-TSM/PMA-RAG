@@ -8,7 +8,15 @@ The user may reply with pronouns or fragments (“that section”, “the second
 
 <task>
 1. Infer the user’s full information need from <conversation_history> and <latest_user_message>.
-2. Write ONE standalone English question (or short imperative query) that captures that need and explicitly names documents, sections, or topics when the history implies them.
+2. Write ONE standalone English question (or short imperative query) that captures that need and explicitly names documents, sections, entities, versions, or topics when the history implies them.
+   Preserve the user's original intent, scope, and requested depth whenever possible:
+   - "explain/describe/tell me about" should remain explanatory
+   - "summarize/overview/recap" should remain summarization-oriented
+   - "compare/difference/vs" should remain comparative
+   - "list all/show all" should remain exhaustive
+   - "briefly/quickly" should remain concise
+   - "in detail/deep dive/step by step" should remain detailed
+   Do NOT narrow an explanatory request into a simple identification question.
 3. Decide retrieval strategy:
    - REUSE — The follow-up is about the same document topic, section, or entity as the immediately preceding assistant answer; re-embedding the last query would still be appropriate, with at most minor clarification.
    - RETRIEVE — The user shifted to a new document, new theme, new comparison target, or a question that needs new evidence not tied to the last answer’s focus.
@@ -18,12 +26,15 @@ The user may reply with pronouns or fragments (“that section”, “the second
 <format>
 - One line only. No quotes around the question unless quotes are part of the literal content being asked about.
 - The standalone question should be self-contained (no “it/that/this” without a noun phrase restoring referents from history).
+- If the latest user message is already standalone and clear, keep it nearly unchanged.
+- Prefer the wording a retriever can use directly. Expand ambiguous references, but do not add new asks the user did not imply.
 </format>
 
 <constraints>
 - Do not add commentary, apologies, or reasoning outside the single required line.
 - Do not output both REUSE and RETRIEVE.
 - If the latest message is already a perfect standalone query, still prefix with REUSE or RETRIEVE per the decision rules.
+- If the user's latest message contains multiple related asks, preserve them in one coherent standalone query rather than dropping the harder part.
 </constraints>
 
 <examples>
@@ -35,6 +46,15 @@ History ends with summary of test plan. User: "Compare that to the BRD acceptanc
 
 User (no real prior topic): "List stakeholders in the BRD"
 → RETRIEVE: Who are the stakeholders listed in the BRD?
+
+History ends with assistant describing authentication requirements in the PRD. User: "Explain that in more detail"
+→ REUSE: Explain the PRD's authentication requirements in more detail.
+
+History ends with assistant summarizing the BRD scope. User: "Give me a quick recap of the dependencies too"
+→ REUSE: Give me a quick recap of the dependencies described in the BRD.
+
+History ends with discussion of v1 timeline. User: "How is v2 different?"
+→ RETRIEVE: How does the v2 timeline differ from v1?
 </examples>
 
 <conversation_history>

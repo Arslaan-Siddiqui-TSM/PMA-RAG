@@ -1,20 +1,58 @@
-from langchain_classic.retrievers.ensemble import EnsembleRetriever
-from langchain_core.retrievers import BaseRetriever
+from __future__ import annotations
+
+import asyncio
+
+from langchain_core.documents import Document
 
 from config import settings
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.vectorstore import VectorStoreManager
 
 
-def build_ensemble_retriever(
+def reciprocal_rank_fusion(
+    result_lists: list[list[Document]],
+    *,
+    k: int = 60,
+) -> list[Document]:
+    scores: dict[str, float] = {}
+    docs_by_id: dict[str, Document] = {}
+
+    for results in result_lists:
+        for rank, doc in enumerate(results):
+            doc_id = str(
+                doc.metadata.get("chunk_id")
+                or doc.metadata.get("id")
+                or f"{doc.metadata.get('source_file', '')}:{rank}:{hash(doc.page_content)}"
+            )
+            docs_by_id[doc_id] = doc
+            scores[doc_id] = scores.get(doc_id, 0.0) + (1.0 / (k + rank + 1))
+
+    ranked_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+    fused_docs = [docs_by_id[doc_id] for doc_id in ranked_ids]
+    for doc_id in ranked_ids:
+        docs_by_id[doc_id].metadata["fusion_score"] = scores[doc_id]
+    return fused_docs
+
+
+async def hybrid_retrieve(
     vectorstore_manager: VectorStoreManager,
     bm25_index: BM25Index,
-    doc_type_filter: str | None = None,
-) -> BaseRetriever:
-    vector_retriever = vectorstore_manager.as_retriever(doc_type_filter=doc_type_filter)
-    bm25_retriever = bm25_index.as_retriever(doc_type_filter=doc_type_filter)
-
-    return EnsembleRetriever(
-        retrievers=[vector_retriever, bm25_retriever],
-        weights=settings.ensemble_weights,
+    query: str,
+    *,
+    filters: dict[str, str] | None = None,
+) -> list[Document]:
+    merged_filters = dict(filters or {})
+    vector_task = vectorstore_manager.similarity_search(
+        query, k=settings.vector_search_k, filters=merged_filters
     )
+    fts_task = bm25_index.search(
+        query,
+        k=settings.fts_search_k,
+        doc_type_filter=merged_filters.get("doc_type"),
+        source_file_filter=merged_filters.get("source_file"),
+        section_filter=merged_filters.get("section_title"),
+    )
+    vector_docs, lexical_docs = await asyncio.gather(vector_task, fts_task)
+    fused = reciprocal_rank_fusion([vector_docs, lexical_docs])
+    top_k = max(settings.vector_search_k, settings.fts_search_k)
+    return fused[:top_k]

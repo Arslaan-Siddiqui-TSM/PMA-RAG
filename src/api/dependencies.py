@@ -49,10 +49,9 @@ async def init_components() -> AppComponents:
     if _components is not None:
         return _components
 
-    vsm = VectorStoreManager()
-    bm25 = BM25Index()
-
     pool = await get_pool()
+    vsm = VectorStoreManager()
+    bm25 = BM25Index(pool)
     metadata = MetadataStore(pool)
     await metadata.setup()
 

@@ -24,17 +24,21 @@ import asyncio
 import json
 import sys
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 from dotenv import load_dotenv
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langsmith import Client, evaluate
 
+from src.api.dependencies import init_components, shutdown_components
 from src.graph.intent import classify_by_heuristics, run_intent_triage
 
 load_dotenv()
 
 DATASETS_DIR = Path(__file__).resolve().parent / "datasets"
+LOGS_DIR = Path(__file__).resolve().parent / "logs"
 
 # For confusion matrix over retrieval decision
 SEARCH_MATRIX_KEYS = [False, True]
@@ -240,6 +244,205 @@ def run_heuristic_eval(client: Client | None = None) -> object:
     return results
 
 
+def _build_rag_state(
+    question: str,
+    doc_type_filter: str | None,
+    source_file_filter: str | None = None,
+    section_filter: str | None = None,
+) -> dict:
+    return {
+        "original_question": question,
+        "reformulated_question": question,
+        "question": question,
+        "intent": "",
+        "search_documents": True,
+        "response_style": "default",
+        "chat_history": [],
+        "reuse_prior_docs": False,
+        "doc_type_filter": doc_type_filter,
+        "source_file_filter": source_file_filter,
+        "section_filter": section_filter,
+        "retrieval_filters": {},
+        "sub_queries": [],
+        "documents": [],
+        "reranked_documents": [],
+        "relevance_scores": [],
+        "confidence": "",
+        "generation": "",
+        "source_citations": [],
+        "validation_passed": True,
+        "validation_reason": "",
+        "validation_attempts": 0,
+        "retry_with_strict_grounding": False,
+        "force_retrieval_on_retry": False,
+        "retrieval_log": {},
+        "messages": [],
+    }
+
+
+def _precision_at_k(relevance: list[int], k: int) -> float:
+    if k <= 0:
+        return 0.0
+    top = relevance[:k]
+    if not top:
+        return 0.0
+    return sum(top) / len(top)
+
+
+def _recall_at_k(relevance: list[int], relevant_total: int, k: int) -> float:
+    if relevant_total <= 0:
+        return 1.0
+    top = relevance[:k]
+    return min(sum(top) / relevant_total, 1.0)
+
+
+def _mrr(relevance: list[int]) -> float:
+    for idx, rel in enumerate(relevance, start=1):
+        if rel:
+            return 1.0 / idx
+    return 0.0
+
+
+def _ndcg_at_k(relevance: list[int], k: int) -> float:
+    import math
+
+    rel_k = relevance[:k]
+    if not rel_k:
+        return 0.0
+    dcg = 0.0
+    for i, rel in enumerate(rel_k, start=1):
+        dcg += rel / math.log2(i + 1)
+    ideal = sorted(rel_k, reverse=True)
+    idcg = 0.0
+    for i, rel in enumerate(ideal, start=1):
+        idcg += rel / math.log2(i + 1)
+    if idcg == 0.0:
+        return 0.0
+    return dcg / idcg
+
+
+def _fact_coverage(answer: str, expected_key_facts: list[str]) -> float:
+    if not expected_key_facts:
+        return 1.0
+    answer_l = answer.lower()
+    matches = sum(1 for fact in expected_key_facts if fact.lower() in answer_l)
+    return matches / len(expected_key_facts)
+
+
+async def _run_rag_eval_async() -> dict:
+    dataset_path = DATASETS_DIR / "rag_end_to_end.json"
+    with open(dataset_path, encoding="utf-8") as f:
+        dataset = json.load(f)
+
+    components = await init_components()
+    logs: list[dict] = []
+
+    recall_scores: list[float] = []
+    precision_scores: list[float] = []
+    mrr_scores: list[float] = []
+    ndcg_scores: list[float] = []
+    faithfulness_scores: list[float] = []
+    fact_coverage_scores: list[float] = []
+
+    for ex in dataset:
+        question = ex["inputs"]["question"]
+        doc_type_filter = ex["inputs"].get("doc_type_filter")
+        expected_doc_types = ex["outputs"].get("expected_doc_types", [])
+        expected_key_facts = ex["outputs"].get("expected_key_facts", [])
+
+        state = _build_rag_state(question, doc_type_filter)
+        run_id = str(uuid4())
+        final_state = await components.rag_graph.ainvoke(
+            state,
+            config={
+                "configurable": {"thread_id": f"eval-{run_id}"},
+                "run_id": run_id,
+                "tags": ["eval", "rag"],
+            },
+        )
+
+        citations = final_state.get("source_citations", [])
+        retrieved_doc_types = [c.get("doc_type", "") for c in citations]
+        retrieved_chunks = [c.get("chunk_id", "") for c in citations]
+        answer = final_state.get("generation", "")
+        validation_passed = bool(final_state.get("validation_passed", True))
+
+        if expected_doc_types:
+            expected_set = set(expected_doc_types)
+            relevance = [1 if dt in expected_set else 0 for dt in retrieved_doc_types]
+            recall = _recall_at_k(
+                relevance, relevant_total=len(expected_set), k=len(relevance) or 1
+            )
+            precision = _precision_at_k(relevance, len(relevance) or 1)
+            mrr_value = _mrr(relevance)
+            ndcg = _ndcg_at_k(relevance, len(relevance) or 1)
+        else:
+            recall = 1.0
+            precision = 1.0
+            mrr_value = 1.0
+            ndcg = 1.0
+
+        faithfulness = 1.0 if validation_passed else 0.0
+        fact_coverage = _fact_coverage(answer, expected_key_facts)
+
+        recall_scores.append(recall)
+        precision_scores.append(precision)
+        mrr_scores.append(mrr_value)
+        ndcg_scores.append(ndcg)
+        faithfulness_scores.append(faithfulness)
+        fact_coverage_scores.append(fact_coverage)
+
+        logs.append(
+            {
+                "query": question,
+                "retrieved_chunks": retrieved_chunks,
+                "retrieved_doc_types": retrieved_doc_types,
+                "final_answer": answer,
+                "confidence": final_state.get("confidence", ""),
+                "validation_passed": validation_passed,
+                "scores": {
+                    "recall_at_k": recall,
+                    "precision_at_k": precision,
+                    "mrr": mrr_value,
+                    "ndcg": ndcg,
+                    "faithfulness": faithfulness,
+                    "fact_coverage": fact_coverage,
+                },
+            }
+        )
+
+    await shutdown_components()
+
+    summary = {
+        "count": len(dataset),
+        "recall_at_k": sum(recall_scores) / len(recall_scores) if recall_scores else 0.0,
+        "precision_at_k": sum(precision_scores) / len(precision_scores) if precision_scores else 0.0,
+        "mrr": sum(mrr_scores) / len(mrr_scores) if mrr_scores else 0.0,
+        "ndcg": sum(ndcg_scores) / len(ndcg_scores) if ndcg_scores else 0.0,
+        "faithfulness": sum(faithfulness_scores) / len(faithfulness_scores) if faithfulness_scores else 0.0,
+        "fact_coverage": sum(fact_coverage_scores) / len(fact_coverage_scores) if fact_coverage_scores else 0.0,
+    }
+
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    log_path = LOGS_DIR / (
+        "rag_eval_"
+        + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        + ".json"
+    )
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump({"summary": summary, "runs": logs}, f, indent=2)
+
+    print("\nRAG Eval Summary:")
+    print(json.dumps(summary, indent=2))
+    print(f"\nDetailed logs: {log_path}")
+    return {"summary": summary, "runs": logs, "log_path": str(log_path)}
+
+
+def run_rag_eval() -> dict:
+    """Run end-to-end RAG evaluation with retrieval + answer metrics."""
+    return asyncio.run(_run_rag_eval_async())
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -283,9 +486,8 @@ def main() -> None:
         print("\nHeuristic eval complete. View results in LangSmith dashboard.")
 
     if args.rag:
-        print("Full RAG pipeline evaluation is not yet implemented.")
-        print("It requires a running vector store and BM25 index with ingested documents.")
-        print("This will be added once the pipeline supports headless execution.")
+        print("Running full RAG pipeline evaluation...")
+        run_rag_eval()
 
 
 if __name__ == "__main__":

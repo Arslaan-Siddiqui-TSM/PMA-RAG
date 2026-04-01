@@ -3,8 +3,6 @@ import chainlit as cl
 from config import settings
 from src.graph import nodes as core_nodes
 from src.graph.nodes import (
-    _bm25_index,
-    _build_citations,
     _format_context,
     set_retrieval_components,
 )
@@ -16,10 +14,12 @@ __all__ = [
     "casual_response_node",
     "help_response_node",
     "reformulate_query_node",
+    "decompose_query_node",
     "retrieve_node",
     "rerank_node",
     "check_relevance_node",
     "generate_node",
+    "validate_answer_node",
 ]
 
 
@@ -104,6 +104,26 @@ async def reformulate_query_node(state: RAGState) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Query decomposition
+# ---------------------------------------------------------------------------
+
+async def decompose_query_node(state: RAGState) -> dict:
+    async with cl.Step(
+        name="Decompose Query",
+        type="tool",
+        show_input=True,
+    ) as step:
+        step.input = f"**Reformulated query:** {state['question']}"
+        result = await core_nodes.decompose_query_node(state)
+        sub_queries = result.get("sub_queries", [])
+        step.output = (
+            f"**Sub-queries:** {len(sub_queries)}\n"
+            + "\n".join(f"- {q}" for q in sub_queries)
+        )
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Retrieval
 # ---------------------------------------------------------------------------
 
@@ -119,8 +139,7 @@ async def retrieve_node(state: RAGState) -> dict:
         step.input = (
             f"**Query:** {question}\n"
             f"**Filter:** {doc_type_filter or 'None (all documents)'}\n"
-            f"**BM25 index size:** "
-            f"{_bm25_index.document_count if _bm25_index else 0} chunks"
+            f"**Lexical retrieval:** PostgreSQL full-text search (FTS)"
         )
         result = await core_nodes.retrieve_node(state)
         documents = result["documents"]
@@ -273,4 +292,22 @@ async def generate_node(state: RAGState) -> dict:
         )
         result = await core_nodes.generate_node(state)
         step.output = f"**LLM Response:**\n{result['generation']}"
+    return result
+
+
+async def validate_answer_node(state: RAGState) -> dict:
+    async with cl.Step(
+        name="Validate Answer",
+        type="tool",
+        show_input=True,
+    ) as step:
+        step.input = (
+            f"**Validation attempts:** {state.get('validation_attempts', 0)}\n"
+            f"**Retry strict mode:** {state.get('retry_with_strict_grounding', False)}"
+        )
+        result = await core_nodes.validate_answer_node(state)
+        step.output = (
+            f"**Passed:** {result.get('validation_passed', True)}\n"
+            f"**Reason:** {result.get('validation_reason', '')}"
+        )
     return result

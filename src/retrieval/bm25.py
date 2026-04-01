@@ -1,53 +1,39 @@
-import pickle
-from pathlib import Path
-
-from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
+from psycopg_pool import AsyncConnectionPool
 
 from config import settings
-
-BM25_INDEX_DIR = Path("data/bm25_index")
-BM25_DOCS_PATH = BM25_INDEX_DIR / "bm25_documents.pkl"
+from src.db.metadata import MetadataStore
 
 
 class BM25Index:
-    def __init__(self) -> None:
-        self._documents: list[Document] = []
-        self._load_persisted()
+    """Postgres FTS-backed lexical retriever.
 
-    def _load_persisted(self) -> None:
-        if BM25_DOCS_PATH.exists():
-            with open(BM25_DOCS_PATH, "rb") as f:
-                self._documents = pickle.load(f)
+    Kept as BM25Index for backward compatibility with existing call sites.
+    """
 
-    def _persist(self) -> None:
-        BM25_INDEX_DIR.mkdir(parents=True, exist_ok=True)
-        with open(BM25_DOCS_PATH, "wb") as f:
-            pickle.dump(self._documents, f)
+    def __init__(self, pool: AsyncConnectionPool) -> None:
+        self._metadata_store = MetadataStore(pool)
 
-    def add_documents(self, documents: list[Document]) -> None:
-        self._documents.extend(documents)
-        self._persist()
+    async def add_documents(self, documents: list[Document]) -> None:
+        # Chunks are persisted by MetadataStore.insert_chunks in ingestion pipeline.
+        _ = documents
 
-    def as_retriever(self, doc_type_filter: str | None = None) -> BM25Retriever:
-        docs = self._documents
-        if doc_type_filter:
-            docs = [d for d in docs if d.metadata.get("doc_type") == doc_type_filter]
-
-        if not docs:
-            docs = [Document(page_content="empty", metadata={})]
-
-        return BM25Retriever.from_documents(
-            docs, k=min(settings.bm25_search_k, len(docs))
+    async def search(
+        self,
+        query: str,
+        *,
+        doc_type_filter: str | None = None,
+        source_file_filter: str | None = None,
+        section_filter: str | None = None,
+        k: int | None = None,
+    ) -> list[Document]:
+        return await self._metadata_store.fts_search(
+            query,
+            k=k or settings.fts_search_k,
+            doc_type_filter=doc_type_filter,
+            source_file_filter=source_file_filter,
+            section_filter=section_filter,
         )
 
-    def delete_by_source_file(self, source_file: str) -> None:
-        self._documents = [
-            d for d in self._documents
-            if d.metadata.get("source_file") != source_file
-        ]
-        self._persist()
-
-    @property
-    def document_count(self) -> int:
-        return len(self._documents)
+    async def delete_by_source_file(self, source_file: str) -> None:
+        await self._metadata_store.delete_chunks_by_source_file(source_file)

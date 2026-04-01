@@ -1,3 +1,12 @@
+"""Structure-aware, token-based document chunker.
+
+Chunks by section/subsection boundaries first, then splits oversized sections
+using a token-based ``RecursiveCharacterTextSplitter`` backed by tiktoken.
+"""
+
+from __future__ import annotations
+
+import tiktoken
 from langchain_core.documents import Document
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
@@ -12,11 +21,18 @@ MARKDOWN_HEADERS = [
     ("###", "h3"),
 ]
 
+_TOKENIZER = tiktoken.get_encoding("cl100k_base")
 
-def _build_size_splitter() -> RecursiveCharacterTextSplitter:
-    return RecursiveCharacterTextSplitter(
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
+
+def _token_length(text: str) -> int:
+    return len(_TOKENIZER.encode(text))
+
+
+def _build_token_splitter() -> RecursiveCharacterTextSplitter:
+    return RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        encoding_name="cl100k_base",
+        chunk_size=settings.chunk_size_tokens,
+        chunk_overlap=settings.chunk_overlap_tokens,
         separators=["\n\n", "\n", ". ", " ", ""],
     )
 
@@ -28,25 +44,57 @@ def _propagate_metadata(original: Document, chunks: list[Document]) -> list[Docu
     return chunks
 
 
-def chunk_markdown_documents(docs: list[Document]) -> list[Document]:
-    md_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=MARKDOWN_HEADERS)
-    size_splitter = _build_size_splitter()
+def _group_by_section(docs: list[Document]) -> list[list[Document]]:
+    """Group documents that share the same section_title into contiguous runs."""
+    if not docs:
+        return []
+    groups: list[list[Document]] = []
+    current_section = docs[0].metadata.get("section_title", "")
+    current_group: list[Document] = [docs[0]]
+
+    for doc in docs[1:]:
+        section = doc.metadata.get("section_title", "")
+        if section == current_section:
+            current_group.append(doc)
+        else:
+            groups.append(current_group)
+            current_section = section
+            current_group = [doc]
+    groups.append(current_group)
+    return groups
+
+
+def chunk_structured_documents(docs: list[Document]) -> list[Document]:
+    """Chunk documents respecting section boundaries, then token-split oversized."""
+    splitter = _build_token_splitter()
     all_chunks: list[Document] = []
 
-    for doc in docs:
-        header_splits = md_splitter.split_text(doc.page_content)
-        sized = size_splitter.split_documents(header_splits)
-        all_chunks.extend(_propagate_metadata(doc, sized))
+    for section_group in _group_by_section(docs):
+        combined_text = "\n\n".join(d.page_content for d in section_group)
+        base_meta = {**section_group[0].metadata}
+
+        if _token_length(combined_text) <= settings.chunk_size_tokens:
+            chunk = Document(page_content=combined_text, metadata=base_meta)
+            all_chunks.append(chunk)
+        else:
+            sub_chunks = splitter.split_text(combined_text)
+            for text in sub_chunks:
+                all_chunks.append(Document(page_content=text, metadata={**base_meta}))
+
+    for i, chunk in enumerate(all_chunks):
+        chunk.metadata["chunk_index"] = i
 
     return all_chunks
 
 
-def chunk_text_documents(docs: list[Document]) -> list[Document]:
-    size_splitter = _build_size_splitter()
+def chunk_markdown_documents(docs: list[Document]) -> list[Document]:
+    md_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=MARKDOWN_HEADERS)
+    token_splitter = _build_token_splitter()
     all_chunks: list[Document] = []
 
     for doc in docs:
-        sized = size_splitter.split_documents([doc])
+        header_splits = md_splitter.split_text(doc.page_content)
+        sized = token_splitter.split_documents(header_splits)
         all_chunks.extend(_propagate_metadata(doc, sized))
 
     return all_chunks
@@ -60,6 +108,6 @@ def chunk_documents(docs: list[Document]) -> list[Document]:
     if md_docs:
         chunks.extend(chunk_markdown_documents(md_docs))
     if other_docs:
-        chunks.extend(chunk_text_documents(other_docs))
+        chunks.extend(chunk_structured_documents(other_docs))
 
     return chunks

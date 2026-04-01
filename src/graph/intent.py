@@ -87,6 +87,7 @@ async def triage_by_llm(
         model=settings.classifier_model,
         temperature=0.01,
         max_tokens=40,
+        disable_streaming=True,
     )
     prompt = TRIAGE_PROMPT.format(
         chat_history=history_text or "(no prior conversation)",

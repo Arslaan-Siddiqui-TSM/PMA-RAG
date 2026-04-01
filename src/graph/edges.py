@@ -19,9 +19,18 @@ def route_after_reformulate(state: RAGState) -> str:
     """After reformulating a follow-up, decide whether to reuse prior docs."""
     if state.get("reuse_prior_docs"):
         return "generate"
-    return "retrieve"
+    return "decompose_query"
 
 
 def route_after_relevance_check(state: RAGState) -> str:
-    """Always generate; unified prompt handles empty or weak retrieval."""
+    """After reranking + confidence estimation, proceed to generation."""
+    return "generate"
+
+
+def route_after_validation(state: RAGState) -> str:
+    """Retry generation, or re-enter retrieval, if validation fails."""
+    if state.get("validation_passed", True):
+        return "end"
+    if state.get("force_retrieval_on_retry", False):
+        return "reformulate_query"
     return "generate"

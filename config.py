@@ -33,20 +33,26 @@ class Settings(BaseSettings):
         return self
 
     # Model IDs
-    llm_model: str = "nvidia/nemotron-mini-4b-instruct"
+    llm_model: str = "nvidia/nemotron-3-nano-30b-a3b"
     classifier_model: str = "microsoft/phi-3-small-128k-instruct"
     embedding_model: str = "nvidia/nv-embedqa-e5-v5"
     reranker_model: str = "nvidia/llama-nemotron-rerank-1b-v2"
 
-    # Chunking
-    chunk_size: int = 500
-    chunk_overlap: int = 50
+    # Chunking (token-based using tiktoken cl100k_base)
+    chunk_size_tokens: int = 400
+    chunk_overlap_tokens: int = 50
+
+    # Ingestion
+    enrich_chunks: bool = True
 
     # Retrieval
     vector_search_k: int = 20
-    bm25_search_k: int = 20
-    ensemble_weights: list[float] = [0.5, 0.5]
+    fts_search_k: int = 20
     reranker_top_n: int = 10
+
+    # Context builder
+    max_context_chunks: int = 6
+    max_context_tokens: int = 3000
 
     # Confidence thresholds (calibrated for sigmoid-normalized logit scores)
     # nvidia/llama-nemotron-rerank-1b-v2 returns logits; after sigmoid:

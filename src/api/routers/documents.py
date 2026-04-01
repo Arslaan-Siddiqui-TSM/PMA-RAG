@@ -132,7 +132,7 @@ async def delete_document(
     file_name = row["file_name"]
 
     components.vectorstore_manager.delete_by_source_file(file_name)
-    components.bm25_index.delete_by_source_file(file_name)
+    await components.bm25_index.delete_by_source_file(file_name)
     await components.metadata_store.delete_document(doc_id)
 
     return DeleteDocumentResponse(id=doc_id, file_name=file_name)

@@ -6,4 +6,4 @@
 {question}
 </user_request>
 
-Summarize or answer as requested, using only the retrieved context.
+Produce the requested summary using only the retrieved context.
