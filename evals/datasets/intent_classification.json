@@ -1,0 +1,801 @@
+[
+  {
+    "inputs": {
+      "question": "What are the functional requirements in the PRD?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Who is responsible for the API module?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What is the timeline for phase 2?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "List the acceptance criteria for the login feature",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What database is used in the technical spec?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Are there any security requirements mentioned?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What testing strategy is outlined for the payment module?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Which stakeholders are listed in the BRD?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are the non-functional requirements?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Does the spec mention error handling for the REST API?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What is the deployment architecture?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Tell me more about that",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "What are the functional requirements?"
+        },
+        {
+          "type": "ai",
+          "content": "The functional requirements include..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Can you elaborate?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "What is the timeline?"
+        },
+        {
+          "type": "ai",
+          "content": "The timeline shows..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What about section 3?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "Summarize the PRD"
+        },
+        {
+          "type": "ai",
+          "content": "The PRD covers..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "And the non-functional ones?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "What are the functional requirements?"
+        },
+        {
+          "type": "ai",
+          "content": "The functional requirements are..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What does it say about performance?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "Tell me about the technical spec"
+        },
+        {
+          "type": "ai",
+          "content": "The technical spec describes..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Go on",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "List the test cases"
+        },
+        {
+          "type": "ai",
+          "content": "Here are the test cases..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What else is mentioned there?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "What does the BRD say about scope?"
+        },
+        {
+          "type": "ai",
+          "content": "The BRD scope section..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Can you give more details on that last point?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "What are the risks?"
+        },
+        {
+          "type": "ai",
+          "content": "The main risks are..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "How about the budget section?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "What is in the BRD?"
+        },
+        {
+          "type": "ai",
+          "content": "The BRD contains..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Explain those in more detail",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "What are the acceptance criteria?"
+        },
+        {
+          "type": "ai",
+          "content": "The acceptance criteria include..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare the BRD and PRD scope sections",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are the differences between v1 and v2 specs?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "How do the functional and non-functional requirements differ?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare the test plan with the acceptance criteria in the PRD",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What is different between the BRD and the technical spec regarding security?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "How does the PRD scope compare to the BRD scope?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare the timelines in the PRD and the project plan",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are the similarities between the use case doc and the functional spec?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize the test plan",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Give me an overview of the BRD",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize the key points of the PRD",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What is the technical spec about in brief?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Give me a high-level summary of the functional spec",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Provide an executive summary of all uploaded documents",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Briefly describe what the use case document covers",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    }
+  },
+  {
+    "inputs": {
+      "question": "TL;DR of the non-functional spec",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    }
+  },
+  {
+    "inputs": {
+      "question": "hi",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "greeting",
+      "search_documents": false,
+      "response_style": "default"
+    },
+    "metadata": {
+      "heuristic_expected": true
+    }
+  },
+  {
+    "inputs": {
+      "question": "hello",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "greeting",
+      "search_documents": false,
+      "response_style": "default"
+    },
+    "metadata": {
+      "heuristic_expected": true
+    }
+  },
+  {
+    "inputs": {
+      "question": "hey there",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "greeting",
+      "search_documents": false,
+      "response_style": "default"
+    },
+    "metadata": {
+      "heuristic_expected": true
+    }
+  },
+  {
+    "inputs": {
+      "question": "thanks",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "thanks_bye",
+      "search_documents": false,
+      "response_style": "default"
+    },
+    "metadata": {
+      "heuristic_expected": true
+    }
+  },
+  {
+    "inputs": {
+      "question": "bye",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "thanks_bye",
+      "search_documents": false,
+      "response_style": "default"
+    },
+    "metadata": {
+      "heuristic_expected": true
+    }
+  },
+  {
+    "inputs": {
+      "question": "thank you!",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "thanks_bye",
+      "search_documents": false,
+      "response_style": "default"
+    },
+    "metadata": {
+      "heuristic_expected": true
+    }
+  },
+  {
+    "inputs": {
+      "question": "help",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "help",
+      "search_documents": false,
+      "response_style": "default"
+    },
+    "metadata": {
+      "heuristic_expected": true
+    }
+  },
+  {
+    "inputs": {
+      "question": "what can you do?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "help",
+      "search_documents": false,
+      "response_style": "default"
+    },
+    "metadata": {
+      "heuristic_expected": true
+    }
+  },
+  {
+    "inputs": {
+      "question": "Hi, can you summarize the BRD?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "summary",
+      "search_documents": true,
+      "response_style": "summary"
+    },
+    "metadata": {
+      "note": "greeting embedded in real question \u2014 should NOT be classified as greeting"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Hey, what are the differences between the PRD and BRD?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    },
+    "metadata": {
+      "note": "greeting embedded in comparison \u2014 should NOT be classified as greeting"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Hello, what are the functional requirements?",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "doc_query",
+      "search_documents": true,
+      "response_style": "default"
+    },
+    "metadata": {
+      "note": "greeting embedded in doc_query \u2014 should NOT be classified as greeting"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Thanks! Now compare the test plan and PRD",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "Summarize the test plan"
+        },
+        {
+          "type": "ai",
+          "content": "The test plan covers..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "comparison",
+      "search_documents": true,
+      "response_style": "default"
+    },
+    "metadata": {
+      "note": "thanks embedded in new question \u2014 should NOT be classified as thanks_bye"
+    }
+  },
+  {
+    "inputs": {
+      "question": "Great, now tell me about the security requirements",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "What is in the BRD?"
+        },
+        {
+          "type": "ai",
+          "content": "The BRD contains..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "followup",
+      "search_documents": true,
+      "response_style": "default"
+    },
+    "metadata": {
+      "note": "positive acknowledgment followed by followup"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What was my last message to you?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "Hello"
+        },
+        {
+          "type": "ai",
+          "content": "Hi there."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "chat_only",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "List my last three questions in this chat",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "chat_only",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What did I ask before this?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "Summarize the PRD"
+        },
+        {
+          "type": "ai",
+          "content": "Summary..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "chat_only",
+      "search_documents": true,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What was my last message to you?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "Hello"
+        },
+        {
+          "type": "ai",
+          "content": "Hi there."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "chat_only",
+      "search_documents": false,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "List my last three questions in this chat",
+      "chat_history": []
+    },
+    "outputs": {
+      "intent": "chat_only",
+      "search_documents": false,
+      "response_style": "default"
+    }
+  },
+  {
+    "inputs": {
+      "question": "What did I ask before this?",
+      "chat_history": [
+        {
+          "type": "human",
+          "content": "Summarize the PRD"
+        },
+        {
+          "type": "ai",
+          "content": "Summary..."
+        }
+      ]
+    },
+    "outputs": {
+      "intent": "chat_only",
+      "search_documents": false,
+      "response_style": "default"
+    }
+  }
+]

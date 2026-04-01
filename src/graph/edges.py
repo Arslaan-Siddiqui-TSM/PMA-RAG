@@ -2,17 +2,17 @@ from src.graph.state import RAGState
 
 
 def route_after_intent(state: RAGState) -> str:
-    """Route based on classified intent."""
-    intent = state.get("intent", "doc_query")
+    """Route after triage: casual/help, direct generate, or retrieval path."""
+    intent = state.get("intent", "")
     match intent:
         case "greeting" | "thanks_bye":
             return "casual_response"
         case "help":
             return "help_response"
-        case "followup":
-            return "reformulate_query"
         case _:
-            return "retrieve"
+            if not state.get("search_documents", True):
+                return "generate"
+            return "reformulate_query"
 
 
 def route_after_reformulate(state: RAGState) -> str:
@@ -23,11 +23,5 @@ def route_after_reformulate(state: RAGState) -> str:
 
 
 def route_after_relevance_check(state: RAGState) -> str:
-    """Route to generate or no_answer based on available documents."""
-    reranked_docs = state.get("reranked_documents", [])
-    scores = state.get("relevance_scores", [])
-
-    if not reranked_docs or not scores:
-        return "no_answer"
-
+    """Always generate; unified prompt handles empty or weak retrieval."""
     return "generate"

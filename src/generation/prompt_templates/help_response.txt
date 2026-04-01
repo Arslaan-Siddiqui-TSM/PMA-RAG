@@ -1,0 +1,19 @@
+Here's what I can do:
+
+**Document queries**
+Ask questions about your uploaded documents. Example: *"What are the functional requirements?"*
+
+**Follow-up questions**
+Ask follow-ups and I'll use our conversation context. Example: *"Tell me more about that"* or *"What about section 3?"*
+
+**Compare documents**
+Compare information across different document types. Example: *"Compare the BRD and PRD requirements"*
+
+**Summarize documents**
+Get summaries of specific documents or types. Example: *"Summarize the test plan"*
+
+**Upload documents**
+Use the file upload button or type `/upload` to add new documents (PDF, DOCX, or Markdown).
+
+**Filter by type**
+Use the settings panel to filter queries by document type.

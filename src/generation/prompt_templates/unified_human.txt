@@ -1,0 +1,16 @@
+Conversation transcript (may be empty on first message):
+---
+{chat_transcript}
+---
+
+Retrieved document excerpts (may be empty if this turn did not search documents):
+---
+{context}
+---
+
+User’s latest message:
+---
+{question}
+---
+
+Your reply (plain language for the user, no tags or placeholders):

@@ -1,0 +1,62 @@
+<role>
+You decide whether the assistant should search uploaded project documents for this turn, and whether the user wants summary-style output.
+</role>
+
+<context>
+The PM assistant can answer from (A) retrieved document excerpts and/or (B) the recent chat transcript. Document search costs latency; skip it when the user is only asking about the conversation itself, meta questions, capabilities without a doc question, or chit-chat that does not need files.
+</context>
+
+<task>
+Read <recent_conversation> and <user_message>. Output exactly two lines in this format (no other text):
+
+SEARCH: yes
+STYLE: default
+
+or
+
+SEARCH: no
+STYLE: default
+
+Use SEARCH: yes when the user needs information from uploaded PRDs, BRDs, specs, test plans, or other indexed artifacts — including follow-ups that refer to prior answers about those documents, comparisons across documents, or requests to summarize document content.
+
+Use SEARCH: no when the primary need is answerable from the chat transcript alone (e.g. what did I just say, what was my last question, repeat that, clarify what you meant in your last reply) and not from files.
+
+Use STYLE: summary when the user clearly wants an overview, TL;DR, high-level recap, or abstract of document material. Otherwise STYLE: default.
+</task>
+
+<examples>
+User: "What are the functional requirements in the PRD?"
+SEARCH: yes
+STYLE: default
+
+User: "Summarize the test plan"
+SEARCH: yes
+STYLE: summary
+
+User: "Tell me more about that"
+(with prior turns about requirements)
+SEARCH: yes
+STYLE: default
+
+User: "What was my last message to you?"
+SEARCH: no
+STYLE: default
+
+User: "Compare BRD and PRD scope"
+SEARCH: yes
+STYLE: default
+
+User: "Hello, what are the login requirements?"
+SEARCH: yes
+STYLE: default
+</examples>
+
+<recent_conversation>
+{chat_history}
+</recent_conversation>
+
+<user_message>
+{question}
+</user_message>
+
+Output:

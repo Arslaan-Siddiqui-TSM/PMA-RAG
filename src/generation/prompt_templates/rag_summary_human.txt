@@ -1,0 +1,9 @@
+<retrieved_context>
+{context}
+</retrieved_context>
+
+<user_request>
+{question}
+</user_request>
+
+Summarize or answer as requested, using only the retrieved context.

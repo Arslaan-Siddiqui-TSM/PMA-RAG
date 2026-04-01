@@ -20,7 +20,6 @@ __all__ = [
     "rerank_node",
     "check_relevance_node",
     "generate_node",
-    "no_answer_node",
 ]
 
 
@@ -38,7 +37,9 @@ async def classify_intent_node(state: RAGState) -> dict:
         result = await core_nodes.classify_intent_node(state)
         chat_history = state.get("chat_history", [])
         step.output = (
-            f"**Detected intent: `{result['intent']}`**\n"
+            f"**Intent / route: `{result['intent']}`**\n"
+            f"**Search documents:** {result.get('search_documents', True)}\n"
+            f"**Response style:** {result.get('response_style', 'default')}\n"
             f"**Chat history length:** {len(chat_history)} messages"
         )
     return result
@@ -230,15 +231,12 @@ async def check_relevance_node(state: RAGState) -> dict:
         confidence = result["confidence"]
 
         reranked_docs = state.get("reranked_documents", [])
-        will_route = (
-            "no_answer" if (not reranked_docs or not scores) else "generate"
-        )
-
         top_display = f"{max(scores):.4f}" if scores else "N/A"
         step.output = (
             f"**Confidence: {confidence}**\n"
             f"**Top normalized score: {top_display}**\n"
-            f"**Routing to: `{will_route}`**"
+            f"**Chunks available:** {len(reranked_docs)}\n"
+            f"**Routing to:** `generate` (unified; empty/weak context handled in generation)"
         )
     return result
 
@@ -249,7 +247,14 @@ async def check_relevance_node(state: RAGState) -> dict:
 
 async def generate_node(state: RAGState) -> dict:
     reranked_docs = state["reranked_documents"]
-    context = _format_context(reranked_docs)
+    if not state.get("search_documents", True):
+        reranked_docs = []
+    context = _format_context(reranked_docs) if reranked_docs else "(skipped retrieval)"
+    chat_hist = state.get("chat_history", [])
+    transcript_preview = "\n".join(
+        f"{'U' if m.type == 'human' else 'A'}: {(m.content or '')[:200]}"
+        for m in chat_hist[-6:]
+    )
 
     async with cl.Step(
         name="Generate Answer",
@@ -258,36 +263,14 @@ async def generate_node(state: RAGState) -> dict:
     ) as step:
         step.input = (
             f"**Model:** {settings.llm_model}\n"
+            f"**Search documents:** {state.get('search_documents', True)}\n"
+            f"**Response style:** {state.get('response_style', 'default')}\n"
             f"**Context chunks:** {len(reranked_docs)}\n"
             f"**Context length:** {len(context)} chars\n\n"
-            f"**Full prompt context sent to LLM:**\n"
-            f"```\n{context[:2000]}"
+            f"**Chat transcript (preview):**\n```\n{transcript_preview or '(empty)'}\n```\n\n"
+            f"**Retrieved context (preview):**\n```\n{context[:2000]}"
             f"{'...(truncated)' if len(context) > 2000 else ''}\n```"
         )
         result = await core_nodes.generate_node(state)
         step.output = f"**LLM Response:**\n{result['generation']}"
-    return result
-
-
-# ---------------------------------------------------------------------------
-# No answer fallback
-# ---------------------------------------------------------------------------
-
-async def no_answer_node(state: RAGState) -> dict:
-    scores = state.get("relevance_scores", [])
-
-    async with cl.Step(
-        name="No Answer (Insufficient Context)",
-        type="tool",
-        show_input=True,
-    ) as step:
-        step.input = (
-            f"**Reason:** No relevant documents found after reranking\n"
-            f"**Normalized scores:** {[round(s, 4) for s in scores]}"
-        )
-        step.output = (
-            "Returning: *I don't have enough information in the documents "
-            "to answer this question.*"
-        )
-    result = await core_nodes.no_answer_node(state)
     return result

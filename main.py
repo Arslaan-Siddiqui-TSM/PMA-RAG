@@ -9,8 +9,10 @@ if sys.platform == "win32":
 
 import chainlit as cl
 from chainlit.input_widget import Select
+from chainlit.types import Feedback
 from engineio.payload import Payload
 from langchain_core.messages import AIMessage, HumanMessage
+from langsmith import Client as LangSmithClient
 
 from config import settings
 from src.db.metadata import MetadataStore
@@ -22,7 +24,6 @@ from src.graph.chainlit_nodes import (
     classify_intent_node,
     generate_node,
     help_response_node,
-    no_answer_node,
     reformulate_query_node,
     rerank_node,
     retrieve_node,
@@ -41,12 +42,36 @@ CHAINLIT_NODE_MAP = {
     "rerank": rerank_node,
     "check_relevance": check_relevance_node,
     "generate": generate_node,
-    "no_answer": no_answer_node,
 }
 
 Payload.max_decode_packets = 500
 
 os.environ.setdefault("NVIDIA_API_KEY", settings.nvidia_api_key)
+
+# Chainlit shows thumbs up/down only when a data layer is active (requires DATABASE_URL).
+os.environ.setdefault("DATABASE_URL", settings.postgres_uri)
+
+if settings.langsmith_api_key:
+    os.environ.setdefault("LANGSMITH_API_KEY", settings.langsmith_api_key)
+    if settings.langsmith_tracing:
+        os.environ.setdefault("LANGSMITH_TRACING", "true")
+    # LangSmith reads project/workspace from os.environ (not from Settings alone).
+    os.environ.setdefault("LANGSMITH_PROJECT", settings.langsmith_project)
+    os.environ.setdefault("LANGSMITH_ENDPOINT", settings.langsmith_endpoint)
+    if settings.langsmith_workspace_id:
+        os.environ.setdefault("LANGSMITH_WORKSPACE_ID", settings.langsmith_workspace_id)
+
+_ls_client: LangSmithClient | None = None
+
+
+def _get_langsmith_client() -> LangSmithClient | None:
+    global _ls_client
+    if not settings.langsmith_api_key:
+        return None
+    if _ls_client is None:
+        _ls_client = LangSmithClient()
+    return _ls_client
+
 
 _vectorstore_manager: VectorStoreManager | None = None
 _bm25_index: BM25Index | None = None
@@ -307,10 +332,14 @@ async def on_message(message: cl.Message):
     chat_history = cl.user_session.get("chat_history", [])
     prior_docs = cl.user_session.get("prior_reranked_docs", [])
 
+    run_id = str(uuid.uuid4())
+
     final_state = await rag_graph.ainvoke(
         {
             "question": content,
             "intent": "",
+            "search_documents": True,
+            "response_style": "default",
             "chat_history": chat_history,
             "reuse_prior_docs": False,
             "doc_type_filter": doc_type_filter,
@@ -322,16 +351,27 @@ async def on_message(message: cl.Message):
             "source_citations": [],
             "messages": [],
         },
-        config={"configurable": {"thread_id": thread_id}},
+        config={
+            "configurable": {"thread_id": thread_id},
+            "run_id": run_id,
+            "metadata": {
+                "user_question": content,
+                "doc_type_filter": doc_type_filter or "all",
+                "chat_history_length": len(chat_history),
+            },
+            "tags": ["chainlit"],
+        },
     )
+
+    cl.user_session.set("last_run_id", run_id)
 
     generation = final_state.get("generation", "")
     confidence = final_state.get("confidence", "")
     citations = final_state.get("source_citations", [])
 
-    new_reranked = final_state.get("reranked_documents", [])
-    if new_reranked:
-        cl.user_session.set("prior_reranked_docs", new_reranked)
+    cl.user_session.set(
+        "prior_reranked_docs", list(final_state.get("reranked_documents") or [])
+    )
 
     chat_history.append(HumanMessage(content=content))
     chat_history.append(AIMessage(content=generation))
@@ -339,9 +379,10 @@ async def on_message(message: cl.Message):
 
     parts: list[str] = [generation] if generation else ["(No response generated)"]
 
+    conf_line = ""
     if confidence:
         emoji = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}.get(confidence, "⚪")
-        parts.append(f"\n\n{emoji} <b>Confidence</b>: {confidence}")
+        conf_line = f"{emoji} <b>Confidence</b>: {confidence}"
 
     if citations:
         lines = []
@@ -353,13 +394,33 @@ async def on_message(message: cl.Message):
             score = c.get("relevance_score", 0)
             entry = f"{i}. <b>{source}</b>" + (f" ({loc})" if loc else "") + f" — {score:.0%}"
             lines.append(entry)
+        inner = f"<br>{'<br>'.join(lines)}"
+        if conf_line:
+            inner += f"<br><br>{conf_line}"
         parts.append(
             f"\n<details><summary>📄 <b>{len(citations)} source(s)</b></summary>"
-            f"<br>{'<br>'.join(lines)}"
+            f"{inner}"
             f"</details>"
+        )
+    elif conf_line:
+        parts.append(
+            f'\n<details><summary>📊 <b>Retrieval</b></summary><br>{conf_line}</details>'
         )
 
     await cl.Message(content="\n".join(parts)).send()
+
+
+@cl.on_feedback
+async def on_feedback(feedback: Feedback):
+    ls = _get_langsmith_client()
+    run_id = cl.user_session.get("last_run_id")
+    if ls and run_id:
+        ls.create_feedback(
+            run_id=run_id,
+            key="user_rating",
+            score=1.0 if feedback.value == 1 else 0.0,
+            comment=feedback.comment or "",
+        )
 
 
 @cl.on_stop

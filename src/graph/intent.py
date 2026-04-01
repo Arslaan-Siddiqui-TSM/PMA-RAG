@@ -2,14 +2,16 @@ import re
 
 from langchain_core.messages import BaseMessage
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
+from langsmith import traceable
 
 from config import settings
-from src.generation.prompts import INTENT_CLASSIFY_PROMPT
+from src.generation.prompts import TRIAGE_PROMPT
 
 GREETING_PATTERNS = re.compile(
-    r"^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening)|"
+    r"^(hi(\s+there)?|hello(\s+there)?|hey(\s+there)?|howdy|"
+    r"good\s*(morning|afternoon|evening)|"
     r"greetings|what'?s\s*up|yo|sup|hiya|namaste|salam|"
-    r"i'?m\s+\w+|my\s+name\s+is)\b",
+    r"i'?m\s+\w+|my\s+name\s+is\s+\w+)\s*[.!]?$",
     re.IGNORECASE,
 )
 
@@ -32,14 +34,17 @@ HELP_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-VALID_INTENTS = {"doc_query", "followup", "comparison", "summary"}
+MAX_HEURISTIC_LENGTH = 60
 
 
 def classify_by_heuristics(question: str) -> str | None:
     """Fast-path: detect obvious intents without an LLM call."""
     text = question.strip()
 
-    if GREETING_PATTERNS.search(text):
+    if len(text) > MAX_HEURISTIC_LENGTH:
+        return None
+
+    if GREETING_PATTERNS.match(text):
         return "greeting"
 
     if THANKS_BYE_PATTERNS.match(text):
@@ -51,11 +56,24 @@ def classify_by_heuristics(question: str) -> str | None:
     return None
 
 
-async def classify_by_llm(
+def _parse_triage_response(raw: str) -> tuple[bool, str]:
+    """Parse SEARCH: yes/no and STYLE: default/summary from model output."""
+    text = raw.strip()
+    search = True
+    if re.search(r"(?i)SEARCH:\s*NO\b", text):
+        search = False
+    elif re.search(r"(?i)SEARCH:\s*YES\b", text):
+        search = True
+    style = "summary" if re.search(r"(?i)STYLE:\s*SUMMARY\b", text) else "default"
+    return search, style
+
+
+@traceable(name="triage_by_llm", run_type="chain")
+async def triage_by_llm(
     question: str,
     chat_history: list[BaseMessage],
-) -> str:
-    """Use the NVIDIA LLM with few-shot examples to classify intent."""
+) -> tuple[bool, str]:
+    """LLM decides whether to search documents and summary vs default style."""
     history_text = ""
     if chat_history:
         recent = chat_history[-6:]
@@ -66,31 +84,44 @@ async def classify_by_llm(
         history_text = "\n".join(lines)
 
     llm = ChatNVIDIA(
-        model=settings.llm_model,
-        temperature=0.0,
-        max_tokens=20,
+        model=settings.classifier_model,
+        temperature=0.01,
+        max_tokens=40,
     )
-    prompt = INTENT_CLASSIFY_PROMPT.format(
+    prompt = TRIAGE_PROMPT.format(
         chat_history=history_text or "(no prior conversation)",
         question=question,
     )
     response = await llm.ainvoke(prompt)
-    raw = response.content.strip().lower()
-
-    for intent in VALID_INTENTS:
-        if intent in raw:
-            return intent
-
-    return "doc_query"
+    return _parse_triage_response(str(response.content))
 
 
+@traceable(name="classify_intent", run_type="chain")
 async def classify_intent(
     question: str,
     chat_history: list[BaseMessage],
 ) -> str:
-    """Hybrid intent classification: heuristics first, then LLM fallback."""
-    heuristic_result = classify_by_heuristics(question)
-    if heuristic_result is not None:
-        return heuristic_result
+    """Backward-compatible: returns a single route label for legacy callers."""
+    result = await run_intent_triage(question, chat_history)
+    return result["intent"]
 
-    return await classify_by_llm(question, chat_history)
+
+async def run_intent_triage(
+    question: str,
+    chat_history: list[BaseMessage],
+) -> dict:
+    """Full triage: heuristics (casual/help) or LLM search/style decision."""
+    heuristic = classify_by_heuristics(question)
+    if heuristic is not None:
+        return {
+            "intent": heuristic,
+            "search_documents": False,
+            "response_style": "default",
+        }
+
+    search, style = await triage_by_llm(question, chat_history)
+    return {
+        "intent": "needs_rag" if search else "chat_only",
+        "search_documents": search,
+        "response_style": style,
+    }

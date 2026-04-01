@@ -34,6 +34,7 @@ class Settings(BaseSettings):
 
     # Model IDs
     llm_model: str = "nvidia/nemotron-mini-4b-instruct"
+    classifier_model: str = "microsoft/phi-3-small-128k-instruct"
     embedding_model: str = "nvidia/nv-embedqa-e5-v5"
     reranker_model: str = "nvidia/llama-nemotron-rerank-1b-v2"
 
@@ -58,6 +59,13 @@ class Settings(BaseSettings):
     confidence_medium_threshold: float = 0.15
     confidence_medium_min_docs: int = 1
     confidence_medium_doc_threshold: float = 0.10
+
+    # LangSmith
+    langsmith_tracing: bool = True
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_api_key: str
+    langsmith_workspace_id: str
+    langsmith_project: str = "PMA-RAG"
 
     # Connection pool
     postgres_pool_max_size: int = 10

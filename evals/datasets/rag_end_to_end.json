@@ -1,0 +1,222 @@
+[
+  {
+    "inputs": {
+      "question": "What are the functional requirements in the PRD?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["functional requirements"],
+      "expected_doc_types": ["PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Who are the stakeholders listed in the BRD?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["stakeholders"],
+      "expected_doc_types": ["BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What is the deployment architecture described in the technical spec?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["deployment", "architecture"],
+      "expected_doc_types": ["Technical Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What test cases are defined for the login module?",
+      "doc_type_filter": "Test Plan"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["test cases", "login"],
+      "expected_doc_types": ["Test Plan"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are the non-functional requirements?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["non-functional requirements"],
+      "expected_doc_types": ["PRD", "Non-Functional Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize the test plan",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["test plan", "summary"],
+      "expected_doc_types": ["Test Plan"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Give me an overview of the BRD",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["BRD", "overview"],
+      "expected_doc_types": ["BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Summarize the key points of the PRD",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["PRD", "key points"],
+      "expected_doc_types": ["PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare the BRD and PRD scope sections",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["BRD", "PRD", "scope"],
+      "expected_doc_types": ["BRD", "PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What are the differences between v1 and v2 specs?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["differences", "v1", "v2"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "How do the functional and non-functional requirements differ?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["functional", "non-functional", "differ"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "What security measures are described in the documents?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["security"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "What is the project timeline?",
+      "doc_type_filter": "PRD"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["timeline"],
+      "expected_doc_types": ["PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "List all the risks mentioned in the BRD",
+      "doc_type_filter": "BRD"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["risks"],
+      "expected_doc_types": ["BRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What APIs are documented in the technical spec?",
+      "doc_type_filter": "Technical Spec"
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["APIs", "technical spec"],
+      "expected_doc_types": ["Technical Spec"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare the test plan with the acceptance criteria in the PRD",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["test plan", "acceptance criteria", "PRD"],
+      "expected_doc_types": ["Test Plan", "PRD"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "Briefly describe what the use case document covers",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "summary",
+      "expected_key_facts": ["use case"],
+      "expected_doc_types": ["Use Case"]
+    }
+  },
+  {
+    "inputs": {
+      "question": "What performance benchmarks are specified?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["performance", "benchmarks"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "What user roles are defined across the documents?",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "doc_query",
+      "expected_key_facts": ["user roles"],
+      "expected_doc_types": []
+    }
+  },
+  {
+    "inputs": {
+      "question": "Compare the timelines in the PRD and the project plan",
+      "doc_type_filter": null
+    },
+    "outputs": {
+      "expected_intent": "comparison",
+      "expected_key_facts": ["timelines", "PRD", "project plan"],
+      "expected_doc_types": ["PRD"]
+    }
+  }
+]

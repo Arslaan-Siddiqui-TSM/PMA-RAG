@@ -1,16 +1,18 @@
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIARerank
+from langsmith import traceable
 
 from config import settings
 from src.generation.confidence import compute_confidence, normalize_scores
 from src.generation.prompts import (
     CASUAL_RESPONSES,
     HELP_RESPONSE,
-    RAG_PROMPT,
     REFORMULATE_PROMPT,
+    RESPONSE_STYLE_HINTS,
+    UNIFIED_PROMPT,
 )
-from src.graph.intent import classify_intent
+from src.graph.intent import run_intent_triage
 from src.graph.state import RAGState
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.hybrid import build_ensemble_retriever
@@ -35,8 +37,7 @@ def set_retrieval_components(
 async def classify_intent_node(state: RAGState) -> dict:
     question = state["question"]
     chat_history = state.get("chat_history", [])
-    intent = await classify_intent(question, chat_history)
-    return {"intent": intent}
+    return await run_intent_triage(question, chat_history)
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +66,7 @@ async def help_response_node(state: RAGState) -> dict:
 # Follow-up reformulation
 # ---------------------------------------------------------------------------
 
+@traceable(name="reformulate_query", run_type="chain")
 async def reformulate_query_node(state: RAGState) -> dict:
     question = state["question"]
     chat_history: list[BaseMessage] = state.get("chat_history", [])
@@ -114,6 +116,7 @@ async def reformulate_query_node(state: RAGState) -> dict:
 # Retrieval
 # ---------------------------------------------------------------------------
 
+@traceable(name="retrieve", run_type="retriever")
 async def retrieve_node(state: RAGState) -> dict:
     question = state["question"]
     doc_type_filter = state.get("doc_type_filter")
@@ -129,6 +132,7 @@ async def retrieve_node(state: RAGState) -> dict:
 # Reranking
 # ---------------------------------------------------------------------------
 
+@traceable(name="rerank", run_type="chain")
 async def rerank_node(state: RAGState) -> dict:
     question = state["question"]
     documents = state["documents"]
@@ -190,6 +194,20 @@ def _format_context(documents: list[Document]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _format_chat_transcript(
+    chat_history: list[BaseMessage], *, max_turns: int = 20
+) -> str:
+    lines: list[str] = []
+    for msg in chat_history[-max_turns:]:
+        role = "User" if msg.type == "human" else "Assistant"
+        text = (msg.content or "").strip()
+        if text:
+            lines.append(f"{role}: {text}")
+    if not lines:
+        return "(no prior conversation in this session)"
+    return "\n".join(lines)
+
+
 def _build_citations(documents: list[Document]) -> list[dict]:
     citations: list[dict] = []
     for doc in documents:
@@ -207,36 +225,44 @@ def _build_citations(documents: list[Document]) -> list[dict]:
     return citations
 
 
+@traceable(name="generate", run_type="chain")
 async def generate_node(state: RAGState) -> dict:
     question = state["question"]
-    reranked_docs = state["reranked_documents"]
-    context = _format_context(reranked_docs)
+    chat_history: list[BaseMessage] = state.get("chat_history", [])
+    chat_transcript = _format_chat_transcript(chat_history)
 
-    chain = RAG_PROMPT | ChatNVIDIA(
+    if state.get("search_documents", True):
+        reranked_docs = list(state.get("reranked_documents") or [])
+    else:
+        reranked_docs = []
+
+    context = _format_context(reranked_docs) if reranked_docs else (
+        "(no document excerpts retrieved for this turn — answer from the "
+        "chat transcript if the question is about the conversation, or say "
+        "documents were not searched.)"
+    )
+
+    style = state.get("response_style") or "default"
+    if style not in RESPONSE_STYLE_HINTS:
+        style = "default"
+    style_hint = RESPONSE_STYLE_HINTS[style]
+
+    chain = UNIFIED_PROMPT | ChatNVIDIA(
         model=settings.llm_model,
         temperature=0.1,
         max_tokens=1024,
     )
     response = await chain.ainvoke(
-        {"context": context, "question": question}
+        {
+            "chat_transcript": chat_transcript,
+            "context": context,
+            "question": question,
+            "response_style_hint": style_hint,
+        }
     )
 
     return {
         "generation": response.content,
         "source_citations": _build_citations(reranked_docs),
-    }
-
-
-# ---------------------------------------------------------------------------
-# No answer fallback
-# ---------------------------------------------------------------------------
-
-async def no_answer_node(state: RAGState) -> dict:
-    return {
-        "generation": (
-            "I don't have enough information in the documents "
-            "to answer this question."
-        ),
-        "confidence": "Low",
-        "source_citations": [],
+        "reranked_documents": reranked_docs,
     }

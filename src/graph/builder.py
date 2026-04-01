@@ -16,7 +16,6 @@ from src.graph.nodes import (
     classify_intent_node,
     generate_node,
     help_response_node,
-    no_answer_node,
     reformulate_query_node,
     rerank_node,
     retrieve_node,
@@ -36,7 +35,6 @@ def _default_node_map() -> NodeMap:
         "rerank": rerank_node,
         "check_relevance": check_relevance_node,
         "generate": generate_node,
-        "no_answer": no_answer_node,
     }
 
 
@@ -58,7 +56,6 @@ def build_graph(node_map: NodeMap | None = None) -> StateGraph:
     graph.add_edge("casual_response", END)
     graph.add_edge("help_response", END)
     graph.add_edge("generate", END)
-    graph.add_edge("no_answer", END)
 
     return graph
 

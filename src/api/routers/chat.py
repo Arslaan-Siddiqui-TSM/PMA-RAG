@@ -19,6 +19,8 @@ def _build_initial_state(question: str, doc_type_filter: str | None) -> dict:
     return {
         "question": question,
         "intent": "",
+        "search_documents": True,
+        "response_style": "default",
         "chat_history": [],
         "reuse_prior_docs": False,
         "doc_type_filter": doc_type_filter,
@@ -86,10 +88,15 @@ async def chat_stream(
 
             if kind == "on_chain_end" and event.get("name") == "classify_intent":
                 output = event.get("data", {}).get("output", {})
-                intent = output.get("intent", "")
                 yield {
                     "event": "intent",
-                    "data": json.dumps({"intent": intent}),
+                    "data": json.dumps(
+                        {
+                            "intent": output.get("intent", ""),
+                            "search_documents": output.get("search_documents", True),
+                            "response_style": output.get("response_style", "default"),
+                        }
+                    ),
                 }
 
             elif kind == "on_chain_end" and event.get("name") == "check_relevance":
