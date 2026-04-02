@@ -20,6 +20,10 @@ Content priorities:
 - If the user asks for a particular angle, such as risks, requirements, or timelines, prioritize that angle while still preserving summary coherence.
 - For mixed requests, match the most detailed part of the request and remain comprehensive throughout.
 - Skip categories that are not supported by the excerpts. Do not pad the answer with generic PM structure.
+
+Project metadata presentation:
+- If project metadata appears in context, default to project names only for listing-style questions.
+- Include timestamps (created_at/updated_at) only when explicitly requested by the user.
 </task>
 
 <format>

@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 from langsmith import Client
 
 load_dotenv()

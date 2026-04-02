@@ -1,7 +1,7 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Documents
@@ -55,27 +55,41 @@ class DocTypesResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Projects
+# ---------------------------------------------------------------------------
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=1000)
+
+
+class ProjectOut(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectListResponse(BaseModel):
+    projects: list[ProjectOut]
+
+
+# ---------------------------------------------------------------------------
 # Chat
 # ---------------------------------------------------------------------------
 
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1)
+    project_id: UUID
     thread_id: str | None = Field(
         default=None,
         description="Conversation thread ID. Omit to auto-create a new thread.",
     )
-    doc_type_filter: str | None = Field(
-        default=None,
-        description="Optional document type to filter retrieval.",
-    )
-    source_file_filter: str | None = Field(
-        default=None,
-        description="Optional source file name to filter retrieval.",
-    )
-    section_filter: str | None = Field(
-        default=None,
-        description="Optional section title to filter retrieval.",
-    )
+
+    model_config = {"extra": "forbid"}
 
 
 class Citation(BaseModel):
@@ -103,6 +117,7 @@ class ChatResponse(BaseModel):
 # Feedback
 # ---------------------------------------------------------------------------
 
+
 class FeedbackRequest(BaseModel):
     thread_id: str
     run_id: str
@@ -119,14 +134,14 @@ class FeedbackResponse(BaseModel):
 # Conversations
 # ---------------------------------------------------------------------------
 
+
+class ConversationCreateRequest(BaseModel):
+    project_id: UUID
+
+
 class ConversationOut(BaseModel):
     thread_id: str
 
 
 class ConversationListResponse(BaseModel):
     conversations: list[ConversationOut]
-
-
-class ConversationDeleteResponse(BaseModel):
-    thread_id: str
-    deleted: bool = True

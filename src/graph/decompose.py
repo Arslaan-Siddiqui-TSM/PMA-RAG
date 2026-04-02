@@ -55,4 +55,3 @@ async def decompose_query(query: str) -> list[str]:
     if len(lines) == 1:
         return [lines[0]]
     return lines[:4]
-

@@ -8,7 +8,7 @@ from slowapi.util import get_remote_address
 
 from config import settings
 from src.api.dependencies import init_components, shutdown_components
-from src.api.routers import chat, conversations, documents
+from src.api.routers import chat, conversations, documents, projects
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[settings.api_rate_limit])
 
@@ -38,6 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(projects.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(conversations.router, prefix="/api/v1")

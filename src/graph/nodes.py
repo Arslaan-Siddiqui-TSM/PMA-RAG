@@ -117,15 +117,15 @@ def _is_standalone_query(question: str) -> bool:
     text = question.strip()
     if not text:
         return False
-    if len(re.findall(r"[A-Za-z0-9]+", text)) <= 4 and _AMBIGUOUS_FOLLOWUP_PATTERNS.search(text):
+    if len(
+        re.findall(r"[A-Za-z0-9]+", text)
+    ) <= 4 and _AMBIGUOUS_FOLLOWUP_PATTERNS.search(text):
         return False
     return not bool(_AMBIGUOUS_FOLLOWUP_PATTERNS.search(text))
 
 
 def _infer_referent_from_history(chat_history: list[BaseMessage]) -> str:
-    recent_text = " ".join(
-        (msg.content or "") for msg in chat_history[-6:]
-    ).lower()
+    recent_text = " ".join((msg.content or "") for msg in chat_history[-6:]).lower()
     if re.search(r"\bdocs?\b|\bdocuments?\b|\bsources?\b|\bchunks?\b", recent_text):
         return "documents"
     if re.search(r"\bprojects?\b", recent_text):
@@ -137,9 +137,7 @@ def _infer_referent_from_history(chat_history: list[BaseMessage]) -> str:
     return "items"
 
 
-def _resolve_ambiguous_followup(
-    question: str, chat_history: list[BaseMessage]
-) -> str:
+def _resolve_ambiguous_followup(question: str, chat_history: list[BaseMessage]) -> str:
     text = question.strip()
     lowered = text.lower()
     if not _AMBIGUOUS_FOLLOWUP_PATTERNS.search(lowered):
@@ -177,7 +175,10 @@ def _is_significantly_narrower(original: str, rewritten: str) -> bool:
 
     original_intent = _detect_query_intent(original)
     rewritten_intent = _detect_query_intent(rewritten)
-    if original_intent in {"explain", "summary", "compare", "list"} and rewritten_intent == "identify":
+    if (
+        original_intent in {"explain", "summary", "compare", "list"}
+        and rewritten_intent == "identify"
+    ):
         return True
     return False
 
@@ -185,6 +186,7 @@ def _is_significantly_narrower(original: str, rewritten: str) -> bool:
 # ---------------------------------------------------------------------------
 # Intent classification
 # ---------------------------------------------------------------------------
+
 
 async def classify_intent_node(state: RAGState) -> dict:
     question = state["question"]
@@ -195,6 +197,7 @@ async def classify_intent_node(state: RAGState) -> dict:
 # ---------------------------------------------------------------------------
 # Casual / help responses (no retrieval)
 # ---------------------------------------------------------------------------
+
 
 async def casual_response_node(state: RAGState) -> dict:
     intent = state.get("intent", "greeting")
@@ -217,6 +220,7 @@ async def help_response_node(state: RAGState) -> dict:
 # ---------------------------------------------------------------------------
 # Follow-up reformulation
 # ---------------------------------------------------------------------------
+
 
 @traceable(name="reformulate_query", run_type="chain")
 async def reformulate_query_node(state: RAGState) -> dict:
@@ -295,6 +299,7 @@ async def reformulate_query_node(state: RAGState) -> dict:
 # Query decomposition
 # ---------------------------------------------------------------------------
 
+
 async def decompose_query_node(state: RAGState) -> dict:
     question = state["question"]
     if not should_decompose(question):
@@ -310,20 +315,17 @@ async def decompose_query_node(state: RAGState) -> dict:
 # Retrieval
 # ---------------------------------------------------------------------------
 
+
 def _build_retrieval_filters(state: RAGState) -> dict[str, str]:
-    filters: dict[str, str] = {}
-    if state.get("doc_type_filter"):
-        filters["doc_type"] = state["doc_type_filter"]
-    if state.get("source_file_filter"):
-        filters["source_file"] = state["source_file_filter"]
-    if state.get("section_filter"):
-        filters["section_title"] = state["section_filter"]
-    return filters
+    return dict(state.get("retrieval_filters") or {})
+
 
 @traceable(name="retrieve", run_type="retriever")
 async def retrieve_node(state: RAGState) -> dict:
     sub_queries = state.get("sub_queries") or [state["question"]]
     filters = _build_retrieval_filters(state)
+    project_id = state["project_id"]
+    collection_name = state["collection_name"]
 
     docs_per_query: list[list[Document]] = []
     for query in sub_queries:
@@ -331,6 +333,8 @@ async def retrieve_node(state: RAGState) -> dict:
             _vectorstore_manager,
             _bm25_index,
             query,
+            project_id=project_id,
+            collection_name=collection_name,
             filters=filters,
         )
         docs_per_query.append(docs)
@@ -367,6 +371,7 @@ async def retrieve_node(state: RAGState) -> dict:
 # Reranking
 # ---------------------------------------------------------------------------
 
+
 @traceable(name="rerank", run_type="chain")
 async def rerank_node(state: RAGState) -> dict:
     question = state["question"]
@@ -385,15 +390,11 @@ async def rerank_node(state: RAGState) -> dict:
     reranked = await reranker.acompress_documents(documents, query=question)
     reranked = list(reranked)
 
-    raw_scores = [
-        doc.metadata.get("relevance_score", 0.0) for doc in reranked
-    ]
+    raw_scores = [doc.metadata.get("relevance_score", 0.0) for doc in reranked]
     normalized = normalize_scores(raw_scores)
 
     for doc, norm_score in zip(reranked, normalized):
-        doc.metadata["relevance_score_raw"] = doc.metadata.get(
-            "relevance_score", 0.0
-        )
+        doc.metadata["relevance_score_raw"] = doc.metadata.get("relevance_score", 0.0)
         doc.metadata["relevance_score"] = norm_score
 
     return {
@@ -406,6 +407,7 @@ async def rerank_node(state: RAGState) -> dict:
 # Relevance check
 # ---------------------------------------------------------------------------
 
+
 async def check_relevance_node(state: RAGState) -> dict:
     scores = state.get("relevance_scores", [])
     confidence = compute_confidence(scores)
@@ -415,6 +417,7 @@ async def check_relevance_node(state: RAGState) -> dict:
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
+
 
 def _token_length(text: str) -> int:
     return len(_TOKENIZER.encode(text))
@@ -477,7 +480,9 @@ def _format_chat_transcript(
     return "\n".join(lines)
 
 
-def _build_citations(documents: list[Document], selected_refs: list[int] | None = None) -> list[dict]:
+def _build_citations(
+    documents: list[Document], selected_refs: list[int] | None = None
+) -> list[dict]:
     selected_indices = set(selected_refs or [])
     citations: list[dict] = []
     for idx, doc in enumerate(documents, 1):
@@ -540,6 +545,7 @@ async def generate_node(state: RAGState) -> dict:
     user_question = state.get("original_question") or retrieval_question
     chat_history: list[BaseMessage] = state.get("chat_history", [])
     chat_transcript = _format_chat_transcript(chat_history)
+    project_context = str(state.get("project_context") or "")
 
     if state.get("search_documents", True):
         reranked_docs = _select_context_documents(
@@ -557,10 +563,14 @@ async def generate_node(state: RAGState) -> dict:
             }
         reranked_docs = []
 
-    context = _format_context(reranked_docs) if reranked_docs else (
-        "(no document excerpts retrieved for this turn — answer from the "
-        "chat transcript if the question is about the conversation, or say "
-        "documents were not searched.)"
+    context = (
+        _format_context(reranked_docs)
+        if reranked_docs
+        else (
+            "(no document excerpts retrieved for this turn — answer from the "
+            "chat transcript if the question is about the conversation, or say "
+            "documents were not searched.)"
+        )
     )
 
     style = state.get("response_style") or "default"
@@ -585,6 +595,7 @@ async def generate_node(state: RAGState) -> dict:
         response = await chain.ainvoke(
             {
                 "context": context,
+                "project_context": project_context,
                 "question": user_question,
             }
         )
@@ -594,6 +605,7 @@ async def generate_node(state: RAGState) -> dict:
             {
                 "chat_transcript": chat_transcript,
                 "context": context,
+                "project_context": project_context,
                 "question": user_question,
                 "response_style_hint": style_hint,
             }
@@ -614,6 +626,7 @@ async def generate_node(state: RAGState) -> dict:
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 @traceable(name="validate_answer", run_type="chain")
 async def validate_answer_node(state: RAGState) -> dict:
@@ -671,7 +684,9 @@ async def validate_answer_node(state: RAGState) -> dict:
             "force_retrieval_on_retry": False,
         }
 
-    context_docs = _select_context_documents(list(state.get("reranked_documents") or []))
+    context_docs = _select_context_documents(
+        list(state.get("reranked_documents") or [])
+    )
     if not context_docs:
         return {
             "validation_passed": True,

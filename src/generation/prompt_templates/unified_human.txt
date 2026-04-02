@@ -6,6 +6,10 @@
 {context}
 </retrieved_document_excerpts>
 
+<project_context>
+{project_context}
+</project_context>
+
 <latest_user_message>
 {question}
 </latest_user_message>

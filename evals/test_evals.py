@@ -43,7 +43,8 @@ class TestHeuristicClassification:
     def test_pure_greetings_detected(self):
         """Pure greeting messages should be caught by heuristics."""
         greeting_examples = [
-            ex for ex in self.examples
+            ex
+            for ex in self.examples
             if ex["outputs"]["intent"] == "greeting"
             and ex.get("metadata", {}).get("heuristic_expected", False)
         ]
@@ -58,7 +59,8 @@ class TestHeuristicClassification:
     def test_pure_thanks_bye_detected(self):
         """Pure thanks/bye messages should be caught by heuristics."""
         thanks_examples = [
-            ex for ex in self.examples
+            ex
+            for ex in self.examples
             if ex["outputs"]["intent"] == "thanks_bye"
             and ex.get("metadata", {}).get("heuristic_expected", False)
         ]
@@ -73,7 +75,8 @@ class TestHeuristicClassification:
     def test_pure_help_detected(self):
         """Pure help messages should be caught by heuristics."""
         help_examples = [
-            ex for ex in self.examples
+            ex
+            for ex in self.examples
             if ex["outputs"]["intent"] == "help"
             and ex.get("metadata", {}).get("heuristic_expected", False)
         ]
@@ -90,7 +93,8 @@ class TestHeuristicClassification:
         classified as greeting by heuristics (they should fall through to LLM).
         """
         embedded_examples = [
-            ex for ex in self.examples
+            ex
+            for ex in self.examples
             if ex["outputs"]["intent"] != "greeting"
             and ex["inputs"]["question"].lower().startswith(("hi", "hey", "hello"))
         ]
@@ -105,7 +109,8 @@ class TestHeuristicClassification:
     def test_doc_queries_not_caught_by_heuristics(self):
         """Document queries should not match any heuristic pattern."""
         doc_examples = [
-            ex for ex in self.examples
+            ex
+            for ex in self.examples
             if ex["outputs"]["intent"] == "doc_query"
             and not ex["inputs"]["question"].lower().startswith(("hi", "hey", "hello"))
         ]

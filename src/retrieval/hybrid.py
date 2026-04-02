@@ -39,14 +39,20 @@ async def hybrid_retrieve(
     bm25_index: BM25Index,
     query: str,
     *,
+    project_id: str,
+    collection_name: str,
     filters: dict[str, str] | None = None,
 ) -> list[Document]:
     merged_filters = dict(filters or {})
     vector_task = vectorstore_manager.similarity_search(
-        query, k=settings.vector_search_k, filters=merged_filters
+        collection_name,
+        query,
+        k=settings.vector_search_k,
+        filters=merged_filters or None,
     )
     fts_task = bm25_index.search(
         query,
+        project_id=project_id,
         k=settings.fts_search_k,
         doc_type_filter=merged_filters.get("doc_type"),
         source_file_filter=merged_filters.get("source_file"),

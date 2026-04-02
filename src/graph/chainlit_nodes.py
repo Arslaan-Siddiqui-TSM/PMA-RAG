@@ -27,6 +27,7 @@ __all__ = [
 # Intent classification
 # ---------------------------------------------------------------------------
 
+
 async def classify_intent_node(state: RAGState) -> dict:
     async with cl.Step(
         name="Classify Intent",
@@ -48,6 +49,7 @@ async def classify_intent_node(state: RAGState) -> dict:
 # ---------------------------------------------------------------------------
 # Casual / help responses (no retrieval)
 # ---------------------------------------------------------------------------
+
 
 async def casual_response_node(state: RAGState) -> dict:
     async with cl.Step(
@@ -76,6 +78,7 @@ async def help_response_node(state: RAGState) -> dict:
 # ---------------------------------------------------------------------------
 # Follow-up reformulation
 # ---------------------------------------------------------------------------
+
 
 async def reformulate_query_node(state: RAGState) -> dict:
     question = state["question"]
@@ -107,6 +110,7 @@ async def reformulate_query_node(state: RAGState) -> dict:
 # Query decomposition
 # ---------------------------------------------------------------------------
 
+
 async def decompose_query_node(state: RAGState) -> dict:
     async with cl.Step(
         name="Decompose Query",
@@ -116,9 +120,8 @@ async def decompose_query_node(state: RAGState) -> dict:
         step.input = f"**Reformulated query:** {state['question']}"
         result = await core_nodes.decompose_query_node(state)
         sub_queries = result.get("sub_queries", [])
-        step.output = (
-            f"**Sub-queries:** {len(sub_queries)}\n"
-            + "\n".join(f"- {q}" for q in sub_queries)
+        step.output = f"**Sub-queries:** {len(sub_queries)}\n" + "\n".join(
+            f"- {q}" for q in sub_queries
         )
     return result
 
@@ -127,9 +130,10 @@ async def decompose_query_node(state: RAGState) -> dict:
 # Retrieval
 # ---------------------------------------------------------------------------
 
+
 async def retrieve_node(state: RAGState) -> dict:
     question = state["question"]
-    doc_type_filter = state.get("doc_type_filter")
+    project_id = state.get("project_id", "")
 
     async with cl.Step(
         name="Retrieve Documents",
@@ -138,7 +142,7 @@ async def retrieve_node(state: RAGState) -> dict:
     ) as step:
         step.input = (
             f"**Query:** {question}\n"
-            f"**Filter:** {doc_type_filter or 'None (all documents)'}\n"
+            f"**Project:** {project_id}\n"
             f"**Lexical retrieval:** PostgreSQL full-text search (FTS)"
         )
         result = await core_nodes.retrieve_node(state)
@@ -169,6 +173,7 @@ async def retrieve_node(state: RAGState) -> dict:
 # Reranking
 # ---------------------------------------------------------------------------
 
+
 async def rerank_node(state: RAGState) -> dict:
     question = state["question"]
     documents = state["documents"]
@@ -186,9 +191,7 @@ async def rerank_node(state: RAGState) -> dict:
         )
 
         if not documents:
-            step.output = (
-                "**No documents to rerank.** Retrieval returned 0 results."
-            )
+            step.output = "**No documents to rerank.** Retrieval returned 0 results."
             return {
                 "reranked_documents": [],
                 "relevance_scores": [],
@@ -216,7 +219,7 @@ async def rerank_node(state: RAGState) -> dict:
                 f"\n**Score summary (normalized):** "
                 f"min={min(normalized):.4f}, "
                 f"max={max(normalized):.4f}, "
-                f"mean={sum(normalized)/len(normalized):.4f}"
+                f"mean={sum(normalized) / len(normalized):.4f}"
             )
         step.output = "\n".join(lines)
     return result
@@ -225,6 +228,7 @@ async def rerank_node(state: RAGState) -> dict:
 # ---------------------------------------------------------------------------
 # Relevance check
 # ---------------------------------------------------------------------------
+
 
 async def check_relevance_node(state: RAGState) -> dict:
     scores = state.get("relevance_scores", [])
@@ -263,6 +267,7 @@ async def check_relevance_node(state: RAGState) -> dict:
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
+
 
 async def generate_node(state: RAGState) -> dict:
     reranked_docs = state["reranked_documents"]

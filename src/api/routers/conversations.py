@@ -1,12 +1,13 @@
 import uuid
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from src.api.dependencies import AppComponents, get_components
+from src.api.dependencies import AppComponents, get_components, require_active_project
 from src.api.schemas import (
-    ConversationDeleteResponse,
+    ConversationCreateRequest,
     ConversationListResponse,
     ConversationOut,
 )
@@ -21,8 +22,14 @@ router = APIRouter(tags=["conversations"])
 @limiter.limit("10/minute")
 async def create_conversation(
     request: Request,
+    body: ConversationCreateRequest,
+    components: AppComponents = Depends(get_components),
 ):
+    pid = str(body.project_id)
+    await require_active_project(pid, components)
+
     thread_id = str(uuid.uuid4())
+    await components.metadata_store.create_thread(thread_id, pid)
     return ConversationOut(thread_id=thread_id)
 
 
@@ -30,55 +37,50 @@ async def create_conversation(
 @limiter.limit("10/minute")
 async def list_conversations(
     request: Request,
+    project_id: UUID = Query(...),
     components: AppComponents = Depends(get_components),
 ):
-    pool = await get_pool()
-    async with pool.connection() as conn:
-        result = await conn.execute(
-            """
-            SELECT DISTINCT thread_id
-            FROM checkpoints
-            ORDER BY thread_id
-            """
-        )
-        rows = await result.fetchall()
+    pid = str(project_id)
+    await require_active_project(pid, components)
 
-    conversations = [ConversationOut(thread_id=row["thread_id"]) for row in rows]
+    thread_ids = await components.metadata_store.list_threads(pid)
+    conversations = [ConversationOut(thread_id=tid) for tid in thread_ids]
     return ConversationListResponse(conversations=conversations)
 
 
-@router.delete(
-    "/conversations/{thread_id}",
-    response_model=ConversationDeleteResponse,
-)
+@router.delete("/conversations/{thread_id}", status_code=204)
 @limiter.limit("10/minute")
 async def delete_conversation(
     request: Request,
     thread_id: str,
+    project_id: UUID = Query(...),
     components: AppComponents = Depends(get_components),
 ):
+    pid = str(project_id)
+    await require_active_project(pid, components)
+
+    try:
+        uuid.UUID(thread_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="thread_id must be a valid UUID")
+
+    bound_project = await components.metadata_store.get_thread_project_id(thread_id)
+    if bound_project is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if bound_project != pid:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
     pool = await get_pool()
     async with pool.connection() as conn:
-        result = await conn.execute(
-            "SELECT 1 FROM checkpoints WHERE thread_id = %s LIMIT 1",
-            (thread_id,),
-        )
-        if await result.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-
         await conn.execute(
-            "DELETE FROM checkpoint_writes WHERE thread_id = %s",
-            (thread_id,),
+            "DELETE FROM checkpoint_writes WHERE thread_id = %s", (thread_id,)
         )
         await conn.execute(
-            "DELETE FROM checkpoint_blobs WHERE thread_id = %s",
-            (thread_id,),
+            "DELETE FROM checkpoint_blobs WHERE thread_id = %s", (thread_id,)
         )
-        await conn.execute(
-            "DELETE FROM checkpoints WHERE thread_id = %s",
-            (thread_id,),
-        )
+        await conn.execute("DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,))
 
     await components.chat_store.delete_thread_data(thread_id)
+    await components.metadata_store.delete_thread(thread_id, pid)
 
-    return ConversationDeleteResponse(thread_id=thread_id)
+    return Response(status_code=204)

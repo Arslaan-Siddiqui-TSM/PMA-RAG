@@ -1,6 +1,7 @@
 import hashlib
 from pathlib import Path
 
+from config import settings
 from src.db.metadata import MetadataStore
 from src.ingestion.chunker import chunk_documents
 from src.ingestion.enrichment import enrich_chunks
@@ -8,7 +9,6 @@ from src.ingestion.loaders import load_document
 from src.ingestion.structure import extract_structure
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.vectorstore import VectorStoreManager
-from config import settings
 
 
 def compute_file_hash(file_path: str) -> str:
@@ -25,12 +25,15 @@ async def ingest_document(
     metadata_store: MetadataStore,
     vectorstore_manager: VectorStoreManager,
     bm25_index: BM25Index,
+    *,
+    project_id: str,
+    collection_name: str,
     original_name: str | None = None,
 ) -> int:
-    """Ingest a single document: load, chunk, embed, store. Returns chunk count."""
+    """Ingest a single document into a specific project. Returns chunk count."""
     file_hash = compute_file_hash(file_path)
 
-    if await metadata_store.document_exists(file_hash):
+    if await metadata_store.document_exists(file_hash, project_id):
         return 0
 
     docs = load_document(file_path, doc_type=doc_type, original_name=original_name)
@@ -47,18 +50,20 @@ async def ingest_document(
     for idx, chunk in enumerate(chunks):
         chunk_id = f"{file_hash}:{idx}"
         chunk.metadata["chunk_id"] = chunk_id
+        chunk.metadata["project_id"] = project_id
         chunk_ids.append(chunk_id)
 
     file_name = original_name or Path(file_path).name
     document_id = await metadata_store.insert_document(
+        project_id=project_id,
         file_name=file_name,
         doc_type=doc_type,
         file_hash=file_hash,
         chunk_count=len(chunks),
     )
 
-    vectorstore_manager.add_documents(chunks, ids=chunk_ids)
-    await metadata_store.insert_chunks(document_id, chunks)
+    vectorstore_manager.add_documents(collection_name, chunks, ids=chunk_ids)
+    await metadata_store.insert_chunks(project_id, document_id, chunks)
     await bm25_index.add_documents(chunks)
 
     return len(chunks)

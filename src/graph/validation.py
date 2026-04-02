@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
 import json
+import re
 
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
@@ -34,9 +34,13 @@ def parse_validation(raw: str) -> tuple[bool, bool, str]:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             support_raw = str(
-                parsed.get("supported", parsed.get("grounded", parsed.get("faithful", "no")))
+                parsed.get(
+                    "supported", parsed.get("grounded", parsed.get("faithful", "no"))
+                )
             ).lower()
-            coverage_raw = str(parsed.get("coverage", parsed.get("complete", "no"))).lower()
+            coverage_raw = str(
+                parsed.get("coverage", parsed.get("complete", "no"))
+            ).lower()
             supported = support_raw in {"yes", "true", "1", "supported", "pass"}
             coverage = coverage_raw in {"yes", "true", "1", "complete", "pass"}
             reason = str(parsed.get("reason", "")).strip() or "Validation JSON parsed"
@@ -47,11 +51,13 @@ def parse_validation(raw: str) -> tuple[bool, bool, str]:
     supported = bool(
         re.search(r"(?i)(SUPPORTED|GROUNDED|FAITHFUL)\s*:\s*(YES|TRUE|PASS)\b", text)
     )
-    coverage = bool(
-        re.search(r"(?i)(COVERAGE|COMPLETE)\s*:\s*(YES|TRUE|PASS)\b", text)
-    )
+    coverage = bool(re.search(r"(?i)(COVERAGE|COMPLETE)\s*:\s*(YES|TRUE|PASS)\b", text))
     reason_match = re.search(r"(?i)REASON:\s*(.+)", text)
-    reason = reason_match.group(1).strip() if reason_match else text[:180] or "Validation parser fallback"
+    reason = (
+        reason_match.group(1).strip()
+        if reason_match
+        else text[:180] or "Validation parser fallback"
+    )
     return supported, coverage, reason
 
 
@@ -75,4 +81,3 @@ async def validate_answer(
         )
     )
     return parse_validation(str(response.content))
-

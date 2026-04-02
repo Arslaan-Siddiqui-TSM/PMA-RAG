@@ -22,18 +22,20 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
 from langsmith import Client, evaluate
 
 from src.api.dependencies import init_components, shutdown_components
 from src.graph.intent import classify_by_heuristics, run_intent_triage
+from src.graph.project_context import build_project_context
 
 load_dotenv()
 
@@ -104,9 +106,7 @@ def search_match_detail(run, example) -> dict:
         expected = "missing"
     return {
         "key": "search_match_detail",
-        "score": int(bool(predicted) == bool(expected))
-        if expected != "missing"
-        else 1,
+        "score": int(bool(predicted) == bool(expected)) if expected != "missing" else 1,
         "comment": f"predicted={predicted!r}, expected={expected!r}",
     }
 
@@ -246,11 +246,14 @@ def run_heuristic_eval(client: Client | None = None) -> object:
 
 def _build_rag_state(
     question: str,
-    doc_type_filter: str | None,
-    source_file_filter: str | None = None,
-    section_filter: str | None = None,
+    project_id: str,
+    collection_name: str,
+    project_context: str,
 ) -> dict:
     return {
+        "project_id": project_id,
+        "collection_name": collection_name,
+        "project_context": project_context,
         "original_question": question,
         "reformulated_question": question,
         "question": question,
@@ -259,9 +262,6 @@ def _build_rag_state(
         "response_style": "default",
         "chat_history": [],
         "reuse_prior_docs": False,
-        "doc_type_filter": doc_type_filter,
-        "source_file_filter": source_file_filter,
-        "section_filter": section_filter,
         "retrieval_filters": {},
         "sub_queries": [],
         "documents": [],
@@ -344,13 +344,39 @@ async def _run_rag_eval_async() -> dict:
     faithfulness_scores: list[float] = []
     fact_coverage_scores: list[float] = []
 
+    project_id = os.environ.get("PMA_EVAL_PROJECT_ID", "")
+    collection_name = os.environ.get("PMA_EVAL_COLLECTION_NAME", "")
+    if not project_id or not collection_name:
+        project = await components.metadata_store.list_active_projects()
+        if not project:
+            print("ERROR: No active projects. Create one before running evals.")
+            await shutdown_components()
+            return {"summary": {}, "runs": [], "log_path": ""}
+        project_id = str(project[0]["id"])
+        collection_name = project[0]["collection_name"]
+
+    all_projects = await components.metadata_store.list_active_projects()
+    active_project = next(
+        (project for project in all_projects if str(project["id"]) == project_id),
+        None,
+    )
+    project_context = build_project_context(
+        active_project=active_project or {"name": "", "description": ""},
+        all_projects=all_projects,
+        max_projects=20,
+    )
+
     for ex in dataset:
         question = ex["inputs"]["question"]
-        doc_type_filter = ex["inputs"].get("doc_type_filter")
         expected_doc_types = ex["outputs"].get("expected_doc_types", [])
         expected_key_facts = ex["outputs"].get("expected_key_facts", [])
 
-        state = _build_rag_state(question, doc_type_filter)
+        state = _build_rag_state(
+            question,
+            project_id,
+            collection_name,
+            project_context,
+        )
         run_id = str(uuid4())
         final_state = await components.rag_graph.ainvoke(
             state,
@@ -415,19 +441,25 @@ async def _run_rag_eval_async() -> dict:
 
     summary = {
         "count": len(dataset),
-        "recall_at_k": sum(recall_scores) / len(recall_scores) if recall_scores else 0.0,
-        "precision_at_k": sum(precision_scores) / len(precision_scores) if precision_scores else 0.0,
+        "recall_at_k": sum(recall_scores) / len(recall_scores)
+        if recall_scores
+        else 0.0,
+        "precision_at_k": sum(precision_scores) / len(precision_scores)
+        if precision_scores
+        else 0.0,
         "mrr": sum(mrr_scores) / len(mrr_scores) if mrr_scores else 0.0,
         "ndcg": sum(ndcg_scores) / len(ndcg_scores) if ndcg_scores else 0.0,
-        "faithfulness": sum(faithfulness_scores) / len(faithfulness_scores) if faithfulness_scores else 0.0,
-        "fact_coverage": sum(fact_coverage_scores) / len(fact_coverage_scores) if fact_coverage_scores else 0.0,
+        "faithfulness": sum(faithfulness_scores) / len(faithfulness_scores)
+        if faithfulness_scores
+        else 0.0,
+        "fact_coverage": sum(fact_coverage_scores) / len(fact_coverage_scores)
+        if fact_coverage_scores
+        else 0.0,
     }
 
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOGS_DIR / (
-        "rag_eval_"
-        + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        + ".json"
+        "rag_eval_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ".json"
     )
     with open(log_path, "w", encoding="utf-8") as f:
         json.dump({"summary": summary, "runs": logs}, f, indent=2)

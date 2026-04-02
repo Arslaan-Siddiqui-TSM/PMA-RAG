@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langsmith import Client as LangSmithClient
 
 from config import settings
-from src.db.metadata import MetadataStore
+from src.db.metadata import MetadataStore, slugify_project_name
 from src.db.postgres import close_pool, get_pool
 from src.graph.builder import compile_graph
 from src.graph.chainlit_nodes import (
@@ -34,6 +34,7 @@ from src.graph.chainlit_nodes import (
 from src.ingestion.pipeline import ingest_document
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.vectorstore import VectorStoreManager
+from src.graph.project_context import build_project_context
 
 CHAINLIT_NODE_MAP = {
     "classify_intent": classify_intent_node,
@@ -51,15 +52,12 @@ CHAINLIT_NODE_MAP = {
 Payload.max_decode_packets = 500
 
 os.environ.setdefault("NVIDIA_API_KEY", settings.nvidia_api_key)
-
-# Chainlit shows thumbs up/down only when a data layer is active (requires DATABASE_URL).
 os.environ.setdefault("DATABASE_URL", settings.postgres_uri)
 
 if settings.langsmith_api_key:
     os.environ.setdefault("LANGSMITH_API_KEY", settings.langsmith_api_key)
     if settings.langsmith_tracing:
         os.environ.setdefault("LANGSMITH_TRACING", "true")
-    # LangSmith reads project/workspace from os.environ (not from Settings alone).
     os.environ.setdefault("LANGSMITH_PROJECT", settings.langsmith_project)
     os.environ.setdefault("LANGSMITH_ENDPOINT", settings.langsmith_endpoint)
     if settings.langsmith_workspace_id:
@@ -101,6 +99,19 @@ async def _get_components():
     return _vectorstore_manager, _bm25_index, _metadata_store
 
 
+async def _get_or_create_collection_name(
+    metadata: MetadataStore, project: dict
+) -> str:
+    collection_name = str(project.get("collection_name") or "").strip()
+    if collection_name:
+        return collection_name
+    project_id = str(project["id"])
+    generated = f"{slugify_project_name(str(project['name']))}__{project_id}"
+    await metadata.set_project_collection_name(project_id, generated)
+    project["collection_name"] = generated
+    return generated
+
+
 @cl.on_chat_start
 async def on_chat_start():
     vsm, bm25, metadata = await _get_components()
@@ -112,30 +123,50 @@ async def on_chat_start():
     rag_graph = await compile_graph(pool, node_map=CHAINLIT_NODE_MAP)
     cl.user_session.set("rag_graph", rag_graph)
 
-    doc_types = await metadata.get_all_doc_types()
-    filter_options = ["All"] + doc_types
+    projects = await metadata.list_active_projects()
+    project_names = [p["name"] for p in projects]
+
+    if not project_names:
+        await cl.Message(
+            content=(
+                "Welcome to the **PMA-RAG Chatbot**!\n\n"
+                "No projects found. Please create a project via the API first, "
+                "then refresh this page."
+            )
+        ).send()
+        return
+
+    project_map = {p["name"]: p for p in projects}
+    cl.user_session.set("project_map", project_map)
 
     chat_settings = [
         Select(
-            id="doc_type_filter",
-            label="Filter by Document Type",
-            values=filter_options,
-            initial_value="All",
+            id="project_selector",
+            label="Select Project",
+            values=project_names,
+            initial_value=project_names[0],
         ),
     ]
     await cl.ChatSettings(chat_settings).send()
-    cl.user_session.set("doc_type_filter", None)
+
+    first_project = projects[0]
+    first_collection_name = await _get_or_create_collection_name(metadata, first_project)
+    cl.user_session.set("project_id", str(first_project["id"]))
+    cl.user_session.set("collection_name", first_collection_name)
+
+    await metadata.create_thread(thread_id, str(first_project["id"]))
+
     cl.user_session.set("chat_history", [])
     cl.user_session.set("prior_reranked_docs", [])
 
     await cl.Message(
         content=(
-            "Welcome to the **PMA-RAG Chatbot**! I can answer questions "
-            "about your project documents.\n\n"
+            f"Welcome to the **PMA-RAG Chatbot**! "
+            f"Active project: **{first_project['name']}**\n\n"
             "- **Upload documents** using the button below "
             "(PDF, DOCX, or Markdown)\n"
             "- **Ask questions** about your uploaded documents\n"
-            "- **Filter by document type** using the settings panel\n\n"
+            "- **Switch projects** using the settings panel\n\n"
             "Upload some documents to get started, or ask a question "
             "if documents are already loaded."
         )
@@ -144,8 +175,30 @@ async def on_chat_start():
 
 @cl.on_settings_update
 async def on_settings_update(new_settings: dict):
-    value = new_settings.get("doc_type_filter", "All")
-    cl.user_session.set("doc_type_filter", None if value == "All" else value)
+    project_name = new_settings.get("project_selector")
+    if not project_name:
+        return
+    project_map = cl.user_session.get("project_map", {})
+    project = project_map.get(project_name)
+    if not project:
+        return
+
+    pid = str(project["id"])
+    _, _, metadata = await _get_components()
+    collection_name = await _get_or_create_collection_name(metadata, project)
+    cl.user_session.set("project_id", pid)
+    cl.user_session.set("collection_name", collection_name)
+
+    thread_id = str(uuid.uuid4())
+    cl.user_session.set("thread_id", thread_id)
+    cl.user_session.set("chat_history", [])
+    cl.user_session.set("prior_reranked_docs", [])
+
+    await metadata.create_thread(thread_id, pid)
+
+    await cl.Message(
+        content=f"Switched to project **{project_name}**. New conversation started."
+    ).send()
 
 
 @cl.action_callback("upload_documents")
@@ -154,6 +207,12 @@ async def on_upload_action(action: cl.Action):
 
 
 async def _handle_file_upload():
+    project_id = cl.user_session.get("project_id")
+    collection_name = cl.user_session.get("collection_name")
+    if not project_id or not collection_name:
+        await cl.Message(content="Please select a project first.").send()
+        return
+
     files = await cl.AskFileMessage(
         content="Upload your documents (PDF, DOCX, or Markdown).",
         accept=[
@@ -194,6 +253,8 @@ async def _handle_file_upload():
                 metadata_store=metadata,
                 vectorstore_manager=vsm,
                 bm25_index=bm25,
+                project_id=project_id,
+                collection_name=collection_name,
                 original_name=file.name,
             )
             if chunks > 0:
@@ -203,18 +264,6 @@ async def _handle_file_upload():
                 results.append(f"  - **{file.name}**: already ingested (skipped)")
         except Exception as e:
             results.append(f"  - **{file.name}**: error - {e}")
-
-    doc_types = await metadata.get_all_doc_types()
-    filter_options = ["All"] + doc_types
-    chat_settings = [
-        Select(
-            id="doc_type_filter",
-            label="Filter by Document Type",
-            values=filter_options,
-            initial_value="All",
-        ),
-    ]
-    await cl.ChatSettings(chat_settings).send()
 
     summary = "\n".join(results)
     await cl.Message(
@@ -228,6 +277,12 @@ async def _handle_file_upload():
 async def _process_attached_files(elements: list) -> None:
     file_elements = [el for el in elements if hasattr(el, "path") and el.path]
     if not file_elements:
+        return
+
+    project_id = cl.user_session.get("project_id")
+    collection_name = cl.user_session.get("collection_name")
+    if not project_id or not collection_name:
+        await cl.Message(content="Please select a project first.").send()
         return
 
     vsm, bm25, metadata = await _get_components()
@@ -248,6 +303,8 @@ async def _process_attached_files(elements: list) -> None:
                 metadata_store=metadata,
                 vectorstore_manager=vsm,
                 bm25_index=bm25,
+                project_id=project_id,
+                collection_name=collection_name,
                 original_name=el.name,
             )
             if chunks > 0:
@@ -257,18 +314,6 @@ async def _process_attached_files(elements: list) -> None:
                 results.append(f"  - **{el.name}**: already ingested (skipped)")
         except Exception as e:
             results.append(f"  - **{el.name}**: error - {e}")
-
-    doc_types = await metadata.get_all_doc_types()
-    filter_options = ["All"] + doc_types
-    chat_settings = [
-        Select(
-            id="doc_type_filter",
-            label="Filter by Document Type",
-            values=filter_options,
-            initial_value="All",
-        ),
-    ]
-    await cl.ChatSettings(chat_settings).send()
 
     summary = "\n".join(results)
     await cl.Message(
@@ -330,19 +375,34 @@ async def on_message(message: cl.Message):
 
     rag_graph = cl.user_session.get("rag_graph")
     thread_id = cl.user_session.get("thread_id")
-    doc_type_filter = cl.user_session.get("doc_type_filter")
+    project_id = cl.user_session.get("project_id")
+    collection_name = cl.user_session.get("collection_name")
 
-    if rag_graph is None:
+    if rag_graph is None or not project_id:
         await cl.Message(content="Session not initialized. Please refresh.").send()
         return
 
     chat_history = cl.user_session.get("chat_history", [])
     prior_docs = cl.user_session.get("prior_reranked_docs", [])
+    _, _, metadata = await _get_components()
+    projects = await metadata.list_active_projects()
+    active_project = next(
+        (project for project in projects if str(project["id"]) == str(project_id)),
+        None,
+    )
+    project_context = build_project_context(
+        active_project=active_project or {"name": "", "description": ""},
+        all_projects=projects,
+        max_projects=20,
+    )
 
     run_id = str(uuid.uuid4())
 
     final_state = await rag_graph.ainvoke(
         {
+            "project_id": project_id,
+            "collection_name": collection_name,
+            "project_context": project_context,
             "original_question": content,
             "reformulated_question": content,
             "question": content,
@@ -351,9 +411,6 @@ async def on_message(message: cl.Message):
             "response_style": "default",
             "chat_history": chat_history,
             "reuse_prior_docs": False,
-            "doc_type_filter": doc_type_filter,
-            "source_file_filter": None,
-            "section_filter": None,
             "retrieval_filters": {},
             "sub_queries": [],
             "documents": [],
@@ -375,7 +432,7 @@ async def on_message(message: cl.Message):
             "run_id": run_id,
             "metadata": {
                 "user_question": content,
-                "doc_type_filter": doc_type_filter or "all",
+                "project_id": project_id,
                 "chat_history_length": len(chat_history),
             },
             "tags": ["chainlit"],
@@ -411,7 +468,11 @@ async def on_message(message: cl.Message):
             section = c.get("section", "")
             loc = f"p.{page}" if page else section if section else ""
             score = c.get("relevance_score", 0)
-            entry = f"{i}. <b>{source}</b>" + (f" ({loc})" if loc else "") + f" — {score:.0%}"
+            entry = (
+                f"{i}. <b>{source}</b>"
+                + (f" ({loc})" if loc else "")
+                + f" — {score:.0%}"
+            )
             lines.append(entry)
         inner = f"<br>{'<br>'.join(lines)}"
         if conf_line:
@@ -423,7 +484,7 @@ async def on_message(message: cl.Message):
         )
     elif conf_line:
         parts.append(
-            f'\n<details><summary>📊 <b>Retrieval</b></summary><br>{conf_line}</details>'
+            f"\n<details><summary>📊 <b>Retrieval</b></summary><br>{conf_line}</details>"
         )
 
     await cl.Message(content="\n".join(parts)).send()

@@ -85,3 +85,31 @@ def get_components() -> AppComponents:
     if _components is None:
         raise RuntimeError("App components not initialized")
     return _components
+
+
+async def require_active_project(
+    project_id: str,
+    components: AppComponents,
+) -> dict:
+    """Validate that project_id references an active (non-deleted) project.
+
+    Returns the full project row dict.
+    Raises HTTPException 422 / 404 / 410 as per design contract.
+    """
+    from uuid import UUID
+
+    from fastapi import HTTPException
+
+    try:
+        UUID(project_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="Invalid project_id format")
+
+    project = await components.metadata_store.get_project(
+        project_id, include_deleted=True
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.get("deleted_at") is not None:
+        raise HTTPException(status_code=410, detail="Project has been deleted")
+    return project

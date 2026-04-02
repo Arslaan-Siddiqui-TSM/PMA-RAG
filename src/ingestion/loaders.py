@@ -65,14 +65,16 @@ def _load_docx(file_path: str) -> list[Document]:
             return
         text = "\n".join(buffer).strip()
         if text:
-            docs.append(Document(
-                page_content=text,
-                metadata={
-                    "element_type": "NarrativeText",
-                    "section_title": current_section,
-                    "parent_section": current_parent_section,
-                },
-            ))
+            docs.append(
+                Document(
+                    page_content=text,
+                    metadata={
+                        "element_type": "NarrativeText",
+                        "section_title": current_section,
+                        "parent_section": current_parent_section,
+                    },
+                )
+            )
         buffer.clear()
 
     for para in docx_doc.paragraphs:
@@ -102,14 +104,16 @@ def _load_docx(file_path: str) -> list[Document]:
             rows.append(" | ".join(cells))
         table_text = "\n".join(rows)
         if table_text.strip():
-            docs.append(Document(
-                page_content=table_text,
-                metadata={
-                    "element_type": "Table",
-                    "section_title": current_section,
-                    "parent_section": current_parent_section,
-                },
-            ))
+            docs.append(
+                Document(
+                    page_content=table_text,
+                    metadata={
+                        "element_type": "Table",
+                        "section_title": current_section,
+                        "parent_section": current_parent_section,
+                    },
+                )
+            )
 
     return docs
 

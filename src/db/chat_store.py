@@ -108,9 +108,7 @@ class ChatStore:
     # Reranked documents
     # ------------------------------------------------------------------
 
-    async def save_reranked_docs(
-        self, thread_id: str, docs: list[Document]
-    ) -> None:
+    async def save_reranked_docs(self, thread_id: str, docs: list[Document]) -> None:
         serialized = [
             {
                 "page_content": doc.page_content,
