@@ -14,23 +14,9 @@ from langchain_core.documents import Document
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 from config import settings
+from src.generation.prompts import ENRICHMENT_PROMPT
 
 logger = logging.getLogger(__name__)
-
-_ENRICHMENT_PROMPT = """\
-You are a metadata extraction assistant. Given a text chunk from a project \
-management document, produce a JSON object with exactly these keys:
-
-- "summary": a 1-2 sentence summary of the chunk
-- "keywords": a list of 3-8 key terms or phrases
-- "questions": a list of 2-3 questions this chunk could answer
-
-Respond ONLY with valid JSON, no markdown fences, no extra text.
-
-Text chunk:
----
-{chunk_text}
----"""
 
 _BATCH_SIZE = 5
 
@@ -69,15 +55,14 @@ async def enrich_chunks(chunks: list[Document]) -> list[Document]:
 
     llm = ChatNVIDIA(
         model=settings.llm_model,
-        temperature=0.7,
-        max_tokens=400,
+        temperature=1,
         disable_streaming=True,
     )
 
     for i in range(0, len(chunks), _BATCH_SIZE):
         batch = chunks[i : i + _BATCH_SIZE]
         for chunk in batch:
-            prompt = _ENRICHMENT_PROMPT.format(
+            prompt = ENRICHMENT_PROMPT.format(
                 chunk_text=chunk.page_content[:2000],
             )
             try:

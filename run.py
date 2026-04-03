@@ -3,8 +3,8 @@
 Passes a SelectorEventLoop factory to uvicorn so psycopg async works on Windows.
 
 Usage:
-    python run_api.py
-    python run_api.py --port 8000 --host 0.0.0.0
+    python run.py
+    python run.py --port 8000 --host 0.0.0.0
 """
 
 import asyncio

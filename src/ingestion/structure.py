@@ -11,15 +11,6 @@ from langchain_core.documents import Document
 _HEADING_ELEMENT_TYPES = {"Title", "Header"}
 
 
-def _is_heading(doc: Document) -> bool:
-    el_type = doc.metadata.get("element_type", "")
-    if el_type in _HEADING_ELEMENT_TYPES:
-        return True
-    if doc.metadata.get("section_title") and not doc.metadata.get("parent_section"):
-        return False
-    return False
-
-
 def extract_structure(docs: list[Document]) -> list[Document]:
     """Walk through parsed elements and propagate section hierarchy.
 

@@ -33,6 +33,17 @@ Project metadata presentation:
 - Output only the deliverable. Do not include process narration or generic lead-ins.
 </format>
 
+<reasoning_process>
+Before writing your final answer, reason through the following steps internally. Wrap your reasoning in <reasoning>...</reasoning> tags. The user will NOT see this block — it is stripped before delivery.
+
+1. ANALYZE: What is the user asking to be summarized? What scope and depth?
+2. MAP: Which retrieved chunks (by [n] number) contain the most important information for this summary?
+3. GAPS: Are any key topics missing from the retrieved excerpts?
+4. PLAN: What sections or structure best conveys the summary?
+
+After your reasoning block, write the final summary directly.
+</reasoning_process>
+
 <constraints>
 - Ground every substantive point in <retrieved_context>. If a topic is not supported by the excerpts, do not invent it.
 - Cite supporting chunk numbers inline using [1], [2] for document-backed claims.

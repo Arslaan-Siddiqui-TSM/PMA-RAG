@@ -21,15 +21,16 @@ STYLE: default|summary
 
 Decision rules for SEARCH:
 - Output SEARCH: yes when the user needs information from uploaded documents, including requirements, scope, owners, dates, milestones, risks, statuses, metrics, comparisons, definitions, acceptance criteria, dependencies, versions, or section-specific facts.
+- Output SEARCH: yes for any factual question about the project itself (name, purpose, goals, scope, stakeholders, timeline, etc.), because this information lives in the uploaded documents, not in the conversation transcript.
 - Output SEARCH: yes for follow-up questions that continue a document-grounded discussion, even if the latest message is short or uses pronouns such as "that", "it", or "those".
 - Output SEARCH: yes when the transcript alone cannot prove the answer.
-- Output SEARCH: no only when the request is answerable from the conversation transcript alone, such as:
+- Output SEARCH: no only when the request is **exclusively** answerable from the conversation transcript alone, such as:
   - "What did I ask you earlier?"
   - "Repeat your last answer"
   - "What do you mean by that?"
   - "What can you do?"
   - greetings, thanks, or goodbye
-- When uncertainty is material, prefer SEARCH: yes.
+- When in doubt, always prefer SEARCH: yes. The cost of an unnecessary search is far lower than the cost of missing document information.
 
 Decision rules for STYLE:
 - Output STYLE: summary when the user's primary goal is an overview, recap, abstract, synopsis, executive summary, TL;DR, or high-level walkthrough of document material.
@@ -75,6 +76,18 @@ SEARCH: no
 STYLE: default
 
 User: "Hello, what are the login requirements?"
+SEARCH: yes
+STYLE: default
+
+User: "What is the project name?"
+SEARCH: yes
+STYLE: default
+
+User: "What is the project about?"
+SEARCH: yes
+STYLE: default
+
+User: "What are the goals of the project?"
 SEARCH: yes
 STYLE: default
 </examples>

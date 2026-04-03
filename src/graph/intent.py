@@ -85,9 +85,13 @@ async def triage_by_llm(
 
     llm = ChatNVIDIA(
         model=settings.classifier_model,
-        temperature=0.01,
+        temperature=0.1,
         max_tokens=40,
+        top_p=1,
         disable_streaming=True,
+        model_kwargs={
+            "chat_template_kwargs": {"enable_thinking": True, "reasoning_budget": 1024},
+        },
     )
     prompt = TRIAGE_PROMPT.format(
         chat_history=history_text or "(no prior conversation)",
@@ -95,16 +99,6 @@ async def triage_by_llm(
     )
     response = await llm.ainvoke(prompt)
     return _parse_triage_response(str(response.content))
-
-
-@traceable(name="classify_intent", run_type="chain")
-async def classify_intent(
-    question: str,
-    chat_history: list[BaseMessage],
-) -> str:
-    """Backward-compatible: returns a single route label for legacy callers."""
-    result = await run_intent_triage(question, chat_history)
-    return result["intent"]
 
 
 async def run_intent_triage(

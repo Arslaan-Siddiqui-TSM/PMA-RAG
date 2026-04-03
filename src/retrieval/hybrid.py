@@ -42,23 +42,27 @@ async def hybrid_retrieve(
     project_id: str,
     collection_name: str,
     filters: dict[str, str] | None = None,
+    vector_k: int | None = None,
+    fts_k: int | None = None,
 ) -> list[Document]:
+    vk = vector_k if vector_k is not None else settings.vector_search_k
+    fk = fts_k if fts_k is not None else settings.fts_search_k
     merged_filters = dict(filters or {})
     vector_task = vectorstore_manager.similarity_search(
         collection_name,
         query,
-        k=settings.vector_search_k,
+        k=vk,
         filters=merged_filters or None,
     )
     fts_task = bm25_index.search(
         query,
         project_id=project_id,
-        k=settings.fts_search_k,
+        k=fk,
         doc_type_filter=merged_filters.get("doc_type"),
         source_file_filter=merged_filters.get("source_file"),
         section_filter=merged_filters.get("section_title"),
     )
     vector_docs, lexical_docs = await asyncio.gather(vector_task, fts_task)
     fused = reciprocal_rank_fusion([vector_docs, lexical_docs])
-    top_k = max(settings.vector_search_k, settings.fts_search_k)
+    top_k = max(vk, fk)
     return fused[:top_k]

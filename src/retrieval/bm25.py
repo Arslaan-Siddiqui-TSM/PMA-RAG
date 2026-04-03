@@ -12,7 +12,7 @@ class BM25Index:
         self._metadata_store = MetadataStore(pool)
 
     async def add_documents(self, documents: list[Document]) -> None:
-        _ = documents
+        """No-op: FTS indexing is handled by MetadataStore during ingestion."""
 
     async def search(
         self,

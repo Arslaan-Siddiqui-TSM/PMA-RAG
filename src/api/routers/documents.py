@@ -12,10 +12,13 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-from src.api.dependencies import AppComponents, get_components, require_active_project
+from src.api.dependencies import (
+    AppComponents,
+    get_components,
+    limiter,
+    require_active_project,
+)
 from src.api.schemas import (
     VALID_DOC_TYPES,
     DeleteDocumentResponse,
@@ -26,8 +29,6 @@ from src.api.schemas import (
     UploadResult,
 )
 from src.ingestion.pipeline import ingest_document
-
-limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(tags=["documents"])
 

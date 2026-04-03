@@ -9,13 +9,6 @@ def _load_prompt_text(filename: str) -> str:
     return (_PROMPTS_DIR / filename).read_text(encoding="utf-8").strip()
 
 
-RAG_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        ("system", _load_prompt_text("rag_system.txt")),
-        ("human", _load_prompt_text("rag_human.txt")),
-    ]
-)
-
 RAG_SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", _load_prompt_text("rag_summary_system.txt")),
@@ -51,9 +44,17 @@ RESPONSE_STYLE_HINTS = {
 
 REFORMULATE_PROMPT = _load_prompt_text("reformulate.txt")
 
+PLAN_RETRIEVAL_PROMPT = _load_prompt_text("plan_retrieval.txt")
+
+REFLECT_RETRIEVAL_PROMPT = _load_prompt_text("reflect_retrieval.txt")
+
+QUALITY_GATE_PROMPT = _load_prompt_text("quality_gate.txt")
+
 CASUAL_RESPONSES = {
     "greeting": _load_prompt_text("casual_greeting.txt"),
     "thanks_bye": _load_prompt_text("casual_thanks_bye.txt"),
 }
 
 HELP_RESPONSE = _load_prompt_text("help_response.txt")
+
+ENRICHMENT_PROMPT = _load_prompt_text("enrichment.txt")

@@ -4,11 +4,14 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from langchain_core.documents import Document
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sse_starlette.sse import EventSourceResponse
 
-from src.api.dependencies import AppComponents, get_components, require_active_project
+from src.api.dependencies import (
+    AppComponents,
+    get_components,
+    limiter,
+    require_active_project,
+)
 from src.api.schemas import (
     ChatRequest,
     ChatResponse,
@@ -17,8 +20,7 @@ from src.api.schemas import (
     FeedbackResponse,
 )
 from src.graph.project_context import build_project_context
-
-limiter = Limiter(key_func=get_remote_address)
+from src.graph.state import build_default_state
 
 router = APIRouter(tags=["chat"])
 
@@ -70,35 +72,17 @@ async def _build_initial_state(
 ) -> dict:
     chat_history = await components.chat_store.get_history(thread_id)
     prior_docs = await components.chat_store.get_reranked_docs(thread_id)
+    document_catalog = await components.metadata_store.list_documents(project_id)
 
-    return {
-        "project_id": project_id,
-        "collection_name": collection_name,
-        "project_context": project_context,
-        "original_question": question,
-        "reformulated_question": question,
-        "question": question,
-        "intent": "",
-        "search_documents": True,
-        "response_style": "default",
-        "chat_history": chat_history,
-        "reuse_prior_docs": False,
-        "retrieval_filters": {},
-        "sub_queries": [],
-        "documents": [],
-        "reranked_documents": prior_docs,
-        "relevance_scores": [],
-        "confidence": "",
-        "generation": "",
-        "source_citations": [],
-        "validation_passed": True,
-        "validation_reason": "",
-        "validation_attempts": 0,
-        "retry_with_strict_grounding": False,
-        "force_retrieval_on_retry": False,
-        "retrieval_log": {},
-        "messages": [],
-    }
+    return build_default_state(
+        question=question,
+        project_id=project_id,
+        collection_name=collection_name,
+        project_context=project_context,
+        chat_history=chat_history,
+        reranked_documents=prior_docs,
+        document_catalog=document_catalog,
+    )
 
 
 async def _persist_turn(
@@ -180,8 +164,8 @@ async def chat(
         answer=final_state.get("generation", ""),
         confidence=final_state.get("confidence", ""),
         citations=citations,
-        validation_passed=final_state.get("validation_passed", True),
-        validation_reason=final_state.get("validation_reason", ""),
+        validation_passed=final_state.get("quality_passed", True),
+        validation_reason=final_state.get("quality_reason", ""),
         thread_id=thread_id,
         run_id=run_id,
         search_documents=final_state.get("search_documents", True),
@@ -254,12 +238,15 @@ async def chat_stream(
                     ),
                 }
 
-            elif kind == "on_chain_end" and event.get("name") == "check_relevance":
+            elif kind == "on_chain_end" and event.get("name") == "reflect_on_retrieval":
                 output = event.get("data", {}).get("output", {})
-                confidence = output.get("confidence", "")
+                sufficient = output.get("retrieval_sufficient", True)
                 yield {
-                    "event": "confidence",
-                    "data": json.dumps({"confidence": confidence}),
+                    "event": "retrieval_status",
+                    "data": json.dumps({
+                        "retrieval_sufficient": sufficient,
+                        "confidence": output.get("confidence", ""),
+                    }),
                 }
 
             elif kind == "on_chat_model_stream":
@@ -283,8 +270,8 @@ async def chat_stream(
                     "answer": final_state.get("generation", ""),
                     "confidence": final_state.get("confidence", ""),
                     "citations": citations,
-                    "validation_passed": final_state.get("validation_passed", True),
-                    "validation_reason": final_state.get("validation_reason", ""),
+                    "validation_passed": final_state.get("quality_passed", True),
+                    "validation_reason": final_state.get("quality_reason", ""),
                     "thread_id": thread_id,
                     "run_id": run_id,
                     "search_documents": final_state.get("search_documents", True),

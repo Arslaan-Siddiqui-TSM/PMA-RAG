@@ -1,9 +1,0 @@
-<retrieved_context>
-{context}
-</retrieved_context>
-
-<user_question>
-{question}
-</user_question>
-
-Answer using only the retrieved context above.

@@ -6,6 +6,8 @@ from src.graph.nodes import (
     _format_context,
     set_retrieval_components,
 )
+from src.graph.planner import plan_retrieval_node as core_plan_retrieval_node
+from src.graph.reflection import reflect_on_retrieval_node as core_reflect_node
 from src.graph.state import RAGState
 
 __all__ = [
@@ -14,12 +16,12 @@ __all__ = [
     "casual_response_node",
     "help_response_node",
     "reformulate_query_node",
-    "decompose_query_node",
+    "plan_retrieval_node",
     "retrieve_node",
     "rerank_node",
-    "check_relevance_node",
+    "reflect_on_retrieval_node",
     "generate_node",
-    "validate_answer_node",
+    "quality_gate_node",
 ]
 
 
@@ -101,27 +103,39 @@ async def reformulate_query_node(state: RAGState) -> dict:
         step.output = (
             f"**Reformulated question:** {reformulated}\n"
             f"**Final routing:** "
-            f"{'reuse prior docs → generate' if can_reuse else 'retrieve new docs'}"
+            f"{'reuse prior docs → generate' if can_reuse else 'plan retrieval → retrieve'}"
         )
     return result
 
 
 # ---------------------------------------------------------------------------
-# Query decomposition
+# Retrieval planning (replaces decompose_query)
 # ---------------------------------------------------------------------------
 
 
-async def decompose_query_node(state: RAGState) -> dict:
+async def plan_retrieval_node(state: RAGState) -> dict:
     async with cl.Step(
-        name="Decompose Query",
+        name="Plan Retrieval",
         type="tool",
         show_input=True,
     ) as step:
-        step.input = f"**Reformulated query:** {state['question']}"
-        result = await core_nodes.decompose_query_node(state)
+        step.input = (
+            f"**Question:** {state['question']}\n"
+            f"**Documents in catalog:** {len(state.get('document_catalog', []))}"
+        )
+        result = await core_plan_retrieval_node(state)
         sub_queries = result.get("sub_queries", [])
-        step.output = f"**Sub-queries:** {len(sub_queries)}\n" + "\n".join(
-            f"- {q}" for q in sub_queries
+        step.output = (
+            f"**Query type:** {result.get('query_type', 'unknown')}\n"
+            f"**Complexity:** {result.get('query_complexity', 'unknown')}\n"
+            f"**Sub-queries ({len(sub_queries)}):**\n"
+            + "\n".join(f"- {q}" for q in sub_queries)
+            + f"\n**Vector K:** {result.get('dynamic_vector_k')}\n"
+            f"**FTS K:** {result.get('dynamic_fts_k')}\n"
+            f"**Reranker top N:** {result.get('dynamic_reranker_top_n')}\n"
+            f"**Relevance threshold:** {result.get('min_relevance_threshold')}\n"
+            f"**Max context chunks:** {result.get('dynamic_max_context_chunks')}\n"
+            f"**Filters:** {result.get('planned_filters', {})}"
         )
     return result
 
@@ -143,14 +157,15 @@ async def retrieve_node(state: RAGState) -> dict:
         step.input = (
             f"**Query:** {question}\n"
             f"**Project:** {project_id}\n"
-            f"**Lexical retrieval:** PostgreSQL full-text search (FTS)"
+            f"**Vector K:** {state.get('dynamic_vector_k', settings.vector_search_k)}\n"
+            f"**FTS K:** {state.get('dynamic_fts_k', settings.fts_search_k)}"
         )
         result = await core_nodes.retrieve_node(state)
         documents = result["documents"]
 
         if not documents:
             step.output = (
-                "**No documents retrieved.** The vector store and BM25 index "
+                "**No documents retrieved.** The vector store and FTS "
                 "returned 0 results."
             )
         else:
@@ -183,23 +198,21 @@ async def rerank_node(state: RAGState) -> dict:
         type="rerank",
         show_input=True,
     ) as step:
+        top_n = state.get("dynamic_reranker_top_n") or settings.reranker_top_n
         step.input = (
             f"**Query:** {question}\n"
             f"**Input documents:** {len(documents)}\n"
             f"**Reranker model:** {settings.reranker_model}\n"
-            f"**Top N:** {settings.reranker_top_n}"
+            f"**Top N:** {top_n}"
         )
-
-        if not documents:
-            step.output = "**No documents to rerank.** Retrieval returned 0 results."
-            return {
-                "reranked_documents": [],
-                "relevance_scores": [],
-            }
 
         result = await core_nodes.rerank_node(state)
         reranked = result["reranked_documents"]
         normalized = result["relevance_scores"]
+
+        if not reranked:
+            step.output = "**No documents to rerank.** Retrieval returned 0 results."
+            return result
 
         lines = [f"**Reranked to {len(reranked)} documents:**\n"]
         for i, doc in enumerate(reranked, 1):
@@ -226,40 +239,31 @@ async def rerank_node(state: RAGState) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Relevance check
+# Retrieval reflection (replaces check_relevance)
 # ---------------------------------------------------------------------------
 
 
-async def check_relevance_node(state: RAGState) -> dict:
-    scores = state.get("relevance_scores", [])
+async def reflect_on_retrieval_node(state: RAGState) -> dict:
+    reranked_docs = state.get("reranked_documents", [])
+    iterations = state.get("retrieval_iterations", 0)
 
     async with cl.Step(
-        name="Check Relevance",
+        name="Reflect on Retrieval",
         type="tool",
         show_input=True,
     ) as step:
         step.input = (
-            f"**Normalized scores (0-1):** {[round(s, 4) for s in scores]}\n"
-            f"**Thresholds:**\n"
-            f"  - High: top >= {settings.confidence_high_threshold} AND "
-            f"{settings.confidence_high_min_docs}+ docs >= "
-            f"{settings.confidence_high_doc_threshold}\n"
-            f"  - Medium: top >= {settings.confidence_medium_threshold} OR "
-            f"{settings.confidence_medium_min_docs}+ docs >= "
-            f"{settings.confidence_medium_doc_threshold}\n"
-            f"  - Low: everything else"
+            f"**Question:** {state.get('original_question') or state['question']}\n"
+            f"**Reranked documents:** {len(reranked_docs)}\n"
+            f"**Retrieval iteration:** {iterations}\n"
+            f"**Query type:** {state.get('query_type', 'unknown')}"
         )
-
-        result = await core_nodes.check_relevance_node(state)
-        confidence = result["confidence"]
-
-        reranked_docs = state.get("reranked_documents", [])
-        top_display = f"{max(scores):.4f}" if scores else "N/A"
+        result = await core_reflect_node(state)
+        sufficient = result.get("retrieval_sufficient", True)
         step.output = (
-            f"**Confidence: {confidence}**\n"
-            f"**Top normalized score: {top_display}**\n"
-            f"**Chunks available:** {len(reranked_docs)}\n"
-            f"**Routing to:** `generate` (unified; empty/weak context handled in generation)"
+            f"**Sufficient:** {sufficient}\n"
+            f"**Missing info:** {result.get('missing_information', 'none')}\n"
+            f"**Routing to:** {'generate' if sufficient else 'retrieve (retry)'}"
         )
     return result
 
@@ -270,7 +274,7 @@ async def check_relevance_node(state: RAGState) -> dict:
 
 
 async def generate_node(state: RAGState) -> dict:
-    reranked_docs = state["reranked_documents"]
+    reranked_docs = state.get("reranked_documents", [])
     if not state.get("search_documents", True):
         reranked_docs = []
     context = _format_context(reranked_docs) if reranked_docs else "(skipped retrieval)"
@@ -289,6 +293,7 @@ async def generate_node(state: RAGState) -> dict:
             f"**Model:** {settings.llm_model}\n"
             f"**Search documents:** {state.get('search_documents', True)}\n"
             f"**Response style:** {state.get('response_style', 'default')}\n"
+            f"**Query type:** {state.get('query_type', 'unknown')}\n"
             f"**Context chunks:** {len(reranked_docs)}\n"
             f"**Context length:** {len(context)} chars\n\n"
             f"**Chat transcript (preview):**\n```\n{transcript_preview or '(empty)'}\n```\n\n"
@@ -300,19 +305,25 @@ async def generate_node(state: RAGState) -> dict:
     return result
 
 
-async def validate_answer_node(state: RAGState) -> dict:
+# ---------------------------------------------------------------------------
+# Quality gate (replaces validate_answer)
+# ---------------------------------------------------------------------------
+
+
+async def quality_gate_node(state: RAGState) -> dict:
     async with cl.Step(
-        name="Validate Answer",
+        name="Quality Gate",
         type="tool",
         show_input=True,
     ) as step:
         step.input = (
-            f"**Validation attempts:** {state.get('validation_attempts', 0)}\n"
-            f"**Retry strict mode:** {state.get('retry_with_strict_grounding', False)}"
+            f"**Quality attempts:** {state.get('quality_attempts', 0)}\n"
+            f"**Previous diagnosis:** {state.get('quality_diagnosis', 'none')}"
         )
-        result = await core_nodes.validate_answer_node(state)
+        result = await core_nodes.quality_gate_node(state)
         step.output = (
-            f"**Passed:** {result.get('validation_passed', True)}\n"
-            f"**Reason:** {result.get('validation_reason', '')}"
+            f"**Passed:** {result.get('quality_passed', True)}\n"
+            f"**Diagnosis:** {result.get('quality_diagnosis', 'none')}\n"
+            f"**Reason:** {result.get('quality_reason', '')}"
         )
     return result

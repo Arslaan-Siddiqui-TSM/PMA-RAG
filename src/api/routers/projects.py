@@ -1,13 +1,9 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-from src.api.dependencies import AppComponents, get_components
+from src.api.dependencies import AppComponents, get_components, limiter
 from src.api.schemas import ProjectCreateRequest, ProjectListResponse, ProjectOut
-
-limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(tags=["projects"])
 
@@ -77,15 +73,7 @@ async def delete_project(
 
 
 async def _delete_thread_artifacts(thread_id: str, components: AppComponents) -> None:
-    from src.db.postgres import get_pool
+    from src.db.postgres import delete_thread_checkpoints
 
-    pool = await get_pool()
-    async with pool.connection() as conn:
-        await conn.execute(
-            "DELETE FROM checkpoint_writes WHERE thread_id = %s", (thread_id,)
-        )
-        await conn.execute(
-            "DELETE FROM checkpoint_blobs WHERE thread_id = %s", (thread_id,)
-        )
-        await conn.execute("DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,))
+    await delete_thread_checkpoints(thread_id)
     await components.chat_store.delete_thread_data(thread_id)

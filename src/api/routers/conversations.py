@@ -2,18 +2,19 @@ import uuid
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-from src.api.dependencies import AppComponents, get_components, require_active_project
+from src.api.dependencies import (
+    AppComponents,
+    get_components,
+    limiter,
+    require_active_project,
+)
 from src.api.schemas import (
     ConversationCreateRequest,
     ConversationListResponse,
     ConversationOut,
 )
-from src.db.postgres import get_pool
-
-limiter = Limiter(key_func=get_remote_address)
+from src.db.postgres import delete_thread_checkpoints
 
 router = APIRouter(tags=["conversations"])
 
@@ -70,16 +71,7 @@ async def delete_conversation(
     if bound_project != pid:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    pool = await get_pool()
-    async with pool.connection() as conn:
-        await conn.execute(
-            "DELETE FROM checkpoint_writes WHERE thread_id = %s", (thread_id,)
-        )
-        await conn.execute(
-            "DELETE FROM checkpoint_blobs WHERE thread_id = %s", (thread_id,)
-        )
-        await conn.execute("DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,))
-
+    await delete_thread_checkpoints(thread_id)
     await components.chat_store.delete_thread_data(thread_id)
     await components.metadata_store.delete_thread(thread_id, pid)
 

@@ -33,8 +33,8 @@ class Settings(BaseSettings):
         return self
 
     # Model IDs
-    llm_model: str = "nvidia/nemotron-3-nano-30b-a3b"
-    classifier_model: str = "microsoft/phi-3-small-128k-instruct"
+    llm_model: str = "nvidia/nemotron-3-super-120b-a12b"
+    classifier_model: str = "nvidia/nemotron-3-nano-30b-a3b"
     embedding_model: str = "nvidia/nv-embedqa-e5-v5"
     reranker_model: str = "nvidia/llama-nemotron-rerank-1b-v2"
 
@@ -45,14 +45,20 @@ class Settings(BaseSettings):
     # Ingestion
     enrich_chunks: bool = True
 
-    # Retrieval
+    # Retrieval (static defaults; overridden per-query by the adaptive planner)
     vector_search_k: int = 20
     fts_search_k: int = 20
     reranker_top_n: int = 10
 
-    # Context builder
+    # Context builder (static defaults; overridden per-query by the adaptive planner)
     max_context_chunks: int = 6
     max_context_tokens: int = 3000
+
+    # Adaptive RAG
+    planner_model: str = "nvidia/nemotron-3-super-120b-a12b"
+    reflection_model: str = "mistralai/mistral-small-4-119b-2603"
+    quality_gate_model: str = "meta/llama-4-maverick-17b-128e-instruct"
+    max_reflection_retries: int = 1
 
     # Confidence thresholds (calibrated for sigmoid-normalized logit scores)
     # nvidia/llama-nemotron-rerank-1b-v2 returns logits; after sigmoid:

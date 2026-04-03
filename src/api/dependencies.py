@@ -3,8 +3,12 @@ from dataclasses import dataclass
 
 from langgraph.graph.state import CompiledStateGraph
 from langsmith import Client as LangSmithClient
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from config import settings
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[settings.api_rate_limit])
 from src.db.chat_store import ChatStore
 from src.db.metadata import MetadataStore
 from src.db.postgres import get_pool

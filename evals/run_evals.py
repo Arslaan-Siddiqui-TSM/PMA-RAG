@@ -22,9 +22,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import os
 import sys
-from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -36,14 +36,12 @@ from langsmith import Client, evaluate
 from src.api.dependencies import init_components, shutdown_components
 from src.graph.intent import classify_by_heuristics, run_intent_triage
 from src.graph.project_context import build_project_context
+from src.graph.state import build_default_state
 
 load_dotenv()
 
 DATASETS_DIR = Path(__file__).resolve().parent / "datasets"
 LOGS_DIR = Path(__file__).resolve().parent / "logs"
-
-# For confusion matrix over retrieval decision
-SEARCH_MATRIX_KEYS = [False, True]
 
 
 # ---------------------------------------------------------------------------
@@ -129,53 +127,6 @@ def intent_category_match(run, example) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Confusion matrix helper (retrieval decision)
-# ---------------------------------------------------------------------------
-
-
-def print_search_confusion_matrix(results) -> None:
-    """Print confusion matrix for search_documents (expected rows, predicted cols)."""
-    matrix: dict[bool, Counter] = {True: Counter(), False: Counter()}
-
-    for result in results:
-        comment = ""
-        for ev in result.get("evaluation_results", {}).get("results", []):
-            if ev.key == "search_match_detail":
-                comment = ev.comment or ""
-                break
-
-        if "expected=" not in comment:
-            continue
-        try:
-            pred_part = comment.split(", ")[0]
-            exp_part = comment.split(", ")[1]
-            predicted = pred_part.split("=", 1)[1].strip() == "True"
-            expected_raw = exp_part.split("=", 1)[1].strip()
-            if expected_raw == "missing":
-                continue
-            expected = expected_raw == "True"
-        except (IndexError, ValueError):
-            continue
-
-        matrix[expected][predicted] += 1
-
-    print("\nConfusion matrix for search_documents (rows=expected, cols=predicted):")
-    print(f"{'':>12}", end="")
-    for p in SEARCH_MATRIX_KEYS:
-        print(f"{str(p):>12}", end="")
-    print()
-
-    for expected in SEARCH_MATRIX_KEYS:
-        row = matrix[expected]
-        print(f"{str(expected):>12}", end="")
-        for predicted in SEARCH_MATRIX_KEYS:
-            count = row.get(predicted, 0)
-            cell = str(count) if count > 0 else "."
-            print(f"{cell:>12}", end="")
-        print()
-
-
-# ---------------------------------------------------------------------------
 # Dataset upload
 # ---------------------------------------------------------------------------
 
@@ -250,34 +201,12 @@ def _build_rag_state(
     collection_name: str,
     project_context: str,
 ) -> dict:
-    return {
-        "project_id": project_id,
-        "collection_name": collection_name,
-        "project_context": project_context,
-        "original_question": question,
-        "reformulated_question": question,
-        "question": question,
-        "intent": "",
-        "search_documents": True,
-        "response_style": "default",
-        "chat_history": [],
-        "reuse_prior_docs": False,
-        "retrieval_filters": {},
-        "sub_queries": [],
-        "documents": [],
-        "reranked_documents": [],
-        "relevance_scores": [],
-        "confidence": "",
-        "generation": "",
-        "source_citations": [],
-        "validation_passed": True,
-        "validation_reason": "",
-        "validation_attempts": 0,
-        "retry_with_strict_grounding": False,
-        "force_retrieval_on_retry": False,
-        "retrieval_log": {},
-        "messages": [],
-    }
+    return build_default_state(
+        question=question,
+        project_id=project_id,
+        collection_name=collection_name,
+        project_context=project_context,
+    )
 
 
 def _precision_at_k(relevance: list[int], k: int) -> float:
@@ -304,8 +233,6 @@ def _mrr(relevance: list[int]) -> float:
 
 
 def _ndcg_at_k(relevance: list[int], k: int) -> float:
-    import math
-
     rel_k = relevance[:k]
     if not rel_k:
         return 0.0
@@ -391,7 +318,7 @@ async def _run_rag_eval_async() -> dict:
         retrieved_doc_types = [c.get("doc_type", "") for c in citations]
         retrieved_chunks = [c.get("chunk_id", "") for c in citations]
         answer = final_state.get("generation", "")
-        validation_passed = bool(final_state.get("validation_passed", True))
+        validation_passed = bool(final_state.get("quality_passed", True))
 
         if expected_doc_types:
             expected_set = set(expected_doc_types)
@@ -492,7 +419,7 @@ def main() -> None:
         "--heuristic", action="store_true", help="Run heuristic-only eval"
     )
     parser.add_argument(
-        "--rag", action="store_true", help="Run full RAG pipeline eval (placeholder)"
+        "--rag", action="store_true", help="Run full RAG pipeline eval"
     )
     args = parser.parse_args()
 

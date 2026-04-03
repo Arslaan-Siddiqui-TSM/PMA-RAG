@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 
 import tiktoken
@@ -9,7 +10,7 @@ from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIARerank
 from langsmith import traceable
 
 from config import settings
-from src.generation.confidence import compute_confidence, normalize_scores
+from src.generation.confidence import normalize_scores
 from src.generation.prompts import (
     CASUAL_RESPONSES,
     HELP_RESPONSE,
@@ -18,10 +19,9 @@ from src.generation.prompts import (
     RESPONSE_STYLE_HINTS,
     UNIFIED_PROMPT,
 )
-from src.graph.decompose import decompose_query, should_decompose
 from src.graph.intent import run_intent_triage
 from src.graph.state import RAGState
-from src.graph.validation import validate_answer
+from src.graph.validation import run_quality_gate
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.hybrid import hybrid_retrieve, reciprocal_rank_fusion
 from src.retrieval.vectorstore import VectorStoreManager
@@ -85,6 +85,10 @@ _STOPWORDS = {
     "that",
 }
 
+_REASONING_PATTERN = re.compile(
+    r"<reasoning>.*?</reasoning>\s*", re.DOTALL | re.IGNORECASE
+)
+
 
 def set_retrieval_components(
     vectorstore_manager: VectorStoreManager, bm25_index: BM25Index
@@ -92,6 +96,14 @@ def set_retrieval_components(
     global _vectorstore_manager, _bm25_index
     _vectorstore_manager = vectorstore_manager
     _bm25_index = bm25_index
+
+
+def _chunk_id(doc: Document) -> str:
+    """Stable unique key for deduplication across retrieval, reflection, and context selection."""
+    cid = doc.metadata.get("chunk_id")
+    if cid:
+        return str(cid)
+    return f"{doc.metadata.get('source_file', '')}:{doc.metadata.get('chunk_index', '')}:{hash(doc.page_content)}"
 
 
 def _detect_query_intent(text: str) -> str:
@@ -235,7 +247,6 @@ async def reformulate_query_node(state: RAGState) -> dict:
             "reformulated_question": question,
             "question": question,
             "reuse_prior_docs": False,
-            "force_retrieval_on_retry": False,
         }
 
     history_lines = []
@@ -246,8 +257,8 @@ async def reformulate_query_node(state: RAGState) -> dict:
 
     llm = ChatNVIDIA(
         model=settings.llm_model,
-        temperature=0.4,
-        max_tokens=200,
+        temperature=1,
+        top_p=0.95,
         disable_streaming=True,
     )
     prompt = REFORMULATE_PROMPT.format(
@@ -271,8 +282,6 @@ async def reformulate_query_node(state: RAGState) -> dict:
     if not reformulated:
         reformulated = question
 
-    # If ambiguous follow-up was not resolved by the model, force a
-    # deterministic referent-aware rewrite from recent conversation.
     if _AMBIGUOUS_FOLLOWUP_PATTERNS.search(question) and (
         reformulated.strip().lower() == question.strip().lower()
         or _AMBIGUOUS_FOLLOWUP_PATTERNS.search(reformulated)
@@ -291,33 +300,19 @@ async def reformulate_query_node(state: RAGState) -> dict:
         "reformulated_question": reformulated,
         "question": reformulated,
         "reuse_prior_docs": can_reuse,
-        "force_retrieval_on_retry": False,
     }
 
 
 # ---------------------------------------------------------------------------
-# Query decomposition
-# ---------------------------------------------------------------------------
-
-
-async def decompose_query_node(state: RAGState) -> dict:
-    question = state["question"]
-    if not should_decompose(question):
-        return {"sub_queries": [question]}
-    parts = await decompose_query(question)
-    parts = [p.strip() for p in parts if p.strip()]
-    if not parts:
-        parts = [question]
-    return {"sub_queries": parts}
-
-
-# ---------------------------------------------------------------------------
-# Retrieval
+# Retrieval (adaptive)
 # ---------------------------------------------------------------------------
 
 
 def _build_retrieval_filters(state: RAGState) -> dict[str, str]:
-    return dict(state.get("retrieval_filters") or {})
+    base = dict(state.get("retrieval_filters") or {})
+    planned = dict(state.get("planned_filters") or {})
+    merged = {**base, **planned}
+    return {k: v for k, v in merged.items() if v}
 
 
 @traceable(name="retrieve", run_type="retriever")
@@ -327,48 +322,57 @@ async def retrieve_node(state: RAGState) -> dict:
     project_id = state["project_id"]
     collection_name = state["collection_name"]
 
-    docs_per_query: list[list[Document]] = []
-    for query in sub_queries:
-        docs = await hybrid_retrieve(
+    vector_k = int(state.get("dynamic_vector_k") or settings.vector_search_k)
+    fts_k = int(state.get("dynamic_fts_k") or settings.fts_search_k)
+
+    async def _run_one(query: str) -> list[Document]:
+        return await hybrid_retrieve(
             _vectorstore_manager,
             _bm25_index,
             query,
             project_id=project_id,
             collection_name=collection_name,
             filters=filters,
+            vector_k=vector_k,
+            fts_k=fts_k,
         )
-        docs_per_query.append(docs)
+
+    docs_per_query = list(
+        await asyncio.gather(*[_run_one(q) for q in sub_queries])
+    )
 
     if len(docs_per_query) == 1:
         merged = docs_per_query[0]
     else:
         merged = reciprocal_rank_fusion(docs_per_query)
-        merged = merged[: max(settings.vector_search_k, settings.fts_search_k)]
+        merged = merged[: max(vector_k, fts_k)]
 
     seen_ids: set[str] = set()
     deduped: list[Document] = []
     for doc in merged:
-        key = str(
-            doc.metadata.get("chunk_id")
-            or f"{doc.metadata.get('source_file', '')}:{doc.metadata.get('chunk_index', '')}:{hash(doc.page_content)}"
-        )
+        key = _chunk_id(doc)
         if key in seen_ids:
             continue
         seen_ids.add(key)
         deduped.append(doc)
 
+    chunk_ids = [_chunk_id(doc) for doc in deduped]
+
     return {
         "documents": deduped,
+        "prior_retrieved_chunk_ids": chunk_ids,
         "retrieval_filters": filters,
         "retrieval_log": {
             "queries": sub_queries,
             "retrieved_count": len(deduped),
+            "vector_k": vector_k,
+            "fts_k": fts_k,
         },
     }
 
 
 # ---------------------------------------------------------------------------
-# Reranking
+# Reranking (adaptive)
 # ---------------------------------------------------------------------------
 
 
@@ -383,9 +387,11 @@ async def rerank_node(state: RAGState) -> dict:
             "relevance_scores": [],
         }
 
+    top_n = int(state.get("dynamic_reranker_top_n") or settings.reranker_top_n)
+
     reranker = NVIDIARerank(
         model=settings.reranker_model,
-        top_n=settings.reranker_top_n,
+        top_n=top_n,
     )
     reranked = await reranker.acompress_documents(documents, query=question)
     reranked = list(reranked)
@@ -404,18 +410,7 @@ async def rerank_node(state: RAGState) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Relevance check
-# ---------------------------------------------------------------------------
-
-
-async def check_relevance_node(state: RAGState) -> dict:
-    scores = state.get("relevance_scores", [])
-    confidence = compute_confidence(scores)
-    return {"confidence": confidence}
-
-
-# ---------------------------------------------------------------------------
-# Generation
+# Generation (with CoT and adaptive context)
 # ---------------------------------------------------------------------------
 
 
@@ -423,20 +418,40 @@ def _token_length(text: str) -> int:
     return len(_TOKENIZER.encode(text))
 
 
-def _select_context_documents(documents: list[Document]) -> list[Document]:
+def _select_context_documents(
+    documents: list[Document],
+    *,
+    max_chunks: int | None = None,
+    min_threshold: float | None = None,
+) -> list[Document]:
+    chunk_limit = max_chunks if max_chunks is not None else settings.max_context_chunks
+    threshold = min_threshold if min_threshold is not None else 0.0
+
     deduped: list[Document] = []
     seen: set[str] = set()
     for doc in documents:
-        key = str(doc.metadata.get("chunk_id") or hash(doc.page_content[:300]))
+        key = _chunk_id(doc)
         if key in seen:
             continue
         seen.add(key)
         deduped.append(doc)
 
+    if not deduped:
+        return []
+
+    if threshold > 0:
+        above = [
+            d for d in deduped
+            if float(d.metadata.get("relevance_score", 0.0)) >= threshold
+        ]
+        candidates = above if above else deduped
+    else:
+        candidates = deduped
+
     selected: list[Document] = []
     token_budget = 0
-    for doc in deduped:
-        if len(selected) >= settings.max_context_chunks:
+    for doc in candidates:
+        if len(selected) >= chunk_limit:
             break
         cost = _token_length(doc.page_content)
         if token_budget + cost > settings.max_context_tokens:
@@ -527,16 +542,8 @@ def _should_block_no_search_answer(question: str) -> bool:
     return bool(_FACTUAL_QUERY_PATTERNS.search(question))
 
 
-def _is_validation_pass(
-    *,
-    supported: bool,
-    coverage: bool,
-    response_style: str,
-) -> bool:
-    # Summary requests can be concise and not fully exhaustive; require grounding.
-    if response_style == "summary":
-        return supported
-    return supported and coverage
+def _strip_reasoning(text: str) -> str:
+    return _REASONING_PATTERN.sub("", text).strip()
 
 
 @traceable(name="generate", run_type="chain")
@@ -547,9 +554,14 @@ async def generate_node(state: RAGState) -> dict:
     chat_transcript = _format_chat_transcript(chat_history)
     project_context = str(state.get("project_context") or "")
 
+    max_chunks = state.get("dynamic_max_context_chunks") or None
+    min_threshold = state.get("min_relevance_threshold") or None
+
     if state.get("search_documents", True):
         reranked_docs = _select_context_documents(
-            list(state.get("reranked_documents") or [])
+            list(state.get("reranked_documents") or []),
+            max_chunks=max_chunks,
+            min_threshold=min_threshold,
         )
     else:
         if _should_block_no_search_answer(user_question):
@@ -558,8 +570,6 @@ async def generate_node(state: RAGState) -> dict:
                 "source_citations": [],
                 "confidence": "Low",
                 "reranked_documents": [],
-                "retry_with_strict_grounding": False,
-                "force_retrieval_on_retry": False,
             }
         reranked_docs = []
 
@@ -577,17 +587,19 @@ async def generate_node(state: RAGState) -> dict:
     if style not in RESPONSE_STYLE_HINTS:
         style = "default"
     style_hint = RESPONSE_STYLE_HINTS[style]
-    if state.get("retry_with_strict_grounding"):
+
+    quality_diagnosis = state.get("quality_diagnosis", "")
+    if quality_diagnosis == "generation":
         style_hint += (
             " Strict retry mode: every claim must be grounded in context and cite "
             "source chunk references like [1], [2]."
         )
 
-    temperature = 0.1 if state.get("search_documents", True) else 0.0
+    temperature = 0.7 if state.get("search_documents", True) else 1
     llm = ChatNVIDIA(
         model=settings.llm_model,
         temperature=temperature,
-        max_tokens=1024,
+        top_p=0.95,
         disable_streaming=True,
     )
     if style == "summary" and state.get("search_documents", True):
@@ -611,59 +623,62 @@ async def generate_node(state: RAGState) -> dict:
             }
         )
 
-    answer = str(response.content)
+    answer = _strip_reasoning(str(response.content))
     refs = _extract_inline_refs(answer)
 
     return {
         "generation": answer,
         "source_citations": _build_citations(reranked_docs, refs),
         "reranked_documents": reranked_docs,
-        "retry_with_strict_grounding": False,
-        "force_retrieval_on_retry": False,
     }
 
 
 # ---------------------------------------------------------------------------
-# Validation
+# Quality gate (replaces validate_answer)
 # ---------------------------------------------------------------------------
 
 
-@traceable(name="validate_answer", run_type="chain")
-async def validate_answer_node(state: RAGState) -> dict:
-    attempts = int(state.get("validation_attempts", 0))
+@traceable(name="quality_gate", run_type="chain")
+async def quality_gate_node(state: RAGState) -> dict:
+    attempts = int(state.get("quality_attempts", 0))
     original_question = state.get("original_question") or state.get("question", "")
-    response_style = str(state.get("response_style") or "default")
+    answer = state.get("generation", "")
+
+    missing_info = state.get("missing_information", "")
+    if missing_info in (
+        "Max retrieval retries reached",
+        "Re-retrieval returned same documents",
+        "No documents retrieved after retries",
+    ):
+        return {
+            "quality_passed": True,
+            "quality_diagnosis": "exhausted_retrieval",
+            "quality_reason": "Retrieval retries exhausted; accepting best answer.",
+            "quality_attempts": attempts,
+        }
+
     if not state.get("search_documents", True):
         transcript = _format_chat_transcript(state.get("chat_history", []))
-        answer = state.get("generation", "")
-        supported, coverage, reason = await validate_answer(
-            question=original_question,
-            answer=answer,
-            context=f"Conversation transcript:\n{transcript}",
+        context = f"Conversation transcript:\n{transcript}"
+    else:
+        context_docs = _select_context_documents(
+            list(state.get("reranked_documents") or []),
+            max_chunks=state.get("dynamic_max_context_chunks"),
+            min_threshold=state.get("min_relevance_threshold"),
         )
-        passed = _is_validation_pass(
-            supported=supported,
-            coverage=coverage,
-            response_style=response_style,
-        )
-        if passed:
+        if not context_docs:
+            if attempts >= 2:
+                return {
+                    "quality_passed": True,
+                    "quality_diagnosis": "missing_context",
+                    "quality_reason": "No retrieved context available after retries.",
+                    "quality_attempts": attempts,
+                }
             return {
-                "validation_passed": True,
-                "validation_reason": reason,
-                "validation_attempts": attempts,
-                "retry_with_strict_grounding": False,
-                "force_retrieval_on_retry": False,
-            }
-
-        if attempts < 1:
-            return {
-                "validation_passed": False,
-                "validation_reason": (
-                    f"{reason}. Retrying with document retrieval enabled."
-                ),
-                "validation_attempts": attempts + 1,
-                "retry_with_strict_grounding": False,
-                "force_retrieval_on_retry": True,
+                "quality_passed": False,
+                "quality_diagnosis": "missing_context",
+                "quality_reason": "No retrieved context available; routing to retrieval.",
+                "quality_attempts": attempts + 1,
                 "search_documents": True,
                 "reuse_prior_docs": False,
                 "question": original_question,
@@ -672,64 +687,75 @@ async def validate_answer_node(state: RAGState) -> dict:
                 "reranked_documents": [],
                 "source_citations": [],
                 "confidence": "Low",
+                "retrieval_iterations": 0,
             }
+        context = _format_context(context_docs)
 
+    try:
+        result = await run_quality_gate(
+            question=original_question,
+            answer=answer,
+            context=context,
+        )
+    except Exception:
         return {
-            "validation_passed": True,
-            "validation_reason": f"Validation failed after retry: {reason}",
-            # Preserve the best available answer instead of replacing it with
-            # a generic fallback after validation retry exhaustion.
-            "generation": answer,
-            "retry_with_strict_grounding": False,
-            "force_retrieval_on_retry": False,
+            "quality_passed": True,
+            "quality_diagnosis": "none",
+            "quality_reason": "Quality gate LLM call failed; accepting answer.",
+            "quality_attempts": attempts,
         }
 
-    context_docs = _select_context_documents(
-        list(state.get("reranked_documents") or [])
+    passed = (
+        result["grounded"]
+        and result["coverage"]
+        and result["completeness"]
+        and not result["hallucination"]
     )
-    if not context_docs:
-        return {
-            "validation_passed": True,
-            "validation_reason": "No retrieved context available.",
-            "force_retrieval_on_retry": False,
-        }
 
-    context = _format_context(context_docs)
-    answer = state.get("generation", "")
-    supported, coverage, reason = await validate_answer(
-        question=original_question,
-        answer=answer,
-        context=context,
-    )
-    passed = _is_validation_pass(
-        supported=supported,
-        coverage=coverage,
-        response_style=response_style,
-    )
     if passed:
         return {
-            "validation_passed": True,
-            "validation_reason": reason,
-            "validation_attempts": attempts,
-            "retry_with_strict_grounding": False,
-            "force_retrieval_on_retry": False,
+            "quality_passed": True,
+            "quality_diagnosis": "none",
+            "quality_reason": result["reason"],
+            "quality_attempts": attempts,
         }
 
-    if attempts < 1:
+    if attempts >= 2:
         return {
-            "validation_passed": False,
-            "validation_reason": reason,
-            "validation_attempts": attempts + 1,
-            "retry_with_strict_grounding": True,
-            "force_retrieval_on_retry": False,
+            "quality_passed": True,
+            "quality_diagnosis": result["diagnosis"],
+            "quality_reason": f"Quality gate failed after retries: {result['reason']}",
+            "quality_attempts": attempts,
+            "generation": answer,
         }
 
-    return {
-        "validation_passed": True,
-        "validation_reason": f"Validation failed after retry: {reason}",
-        # Keep the generated answer to avoid regressions where a valid first
-        # response gets overwritten by a stricter retry outcome.
-        "generation": answer,
-        "retry_with_strict_grounding": False,
-        "force_retrieval_on_retry": False,
+    diagnosis = result["diagnosis"]
+    if diagnosis not in ("generation", "missing_context"):
+        diagnosis = "generation"
+
+    if not state.get("search_documents", True):
+        diagnosis = "missing_context"
+
+    base_result: dict = {
+        "quality_passed": False,
+        "quality_diagnosis": diagnosis,
+        "quality_reason": result["reason"],
+        "quality_attempts": attempts + 1,
     }
+
+    if diagnosis == "missing_context":
+        base_result.update(
+            {
+                "search_documents": True,
+                "reuse_prior_docs": False,
+                "question": original_question,
+                "reformulated_question": original_question,
+                "documents": [],
+                "reranked_documents": [],
+                "source_citations": [],
+                "confidence": "Low",
+                "retrieval_iterations": 0,
+            }
+        )
+
+    return base_result

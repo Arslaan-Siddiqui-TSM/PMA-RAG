@@ -20,33 +20,34 @@ from src.db.postgres import close_pool, get_pool
 from src.graph.builder import compile_graph
 from src.graph.chainlit_nodes import (
     casual_response_node,
-    check_relevance_node,
     classify_intent_node,
-    decompose_query_node,
     generate_node,
     help_response_node,
+    plan_retrieval_node,
+    quality_gate_node,
+    reflect_on_retrieval_node,
     reformulate_query_node,
     rerank_node,
     retrieve_node,
     set_retrieval_components,
-    validate_answer_node,
 )
+from src.graph.project_context import build_project_context
+from src.graph.state import build_default_state
 from src.ingestion.pipeline import ingest_document
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.vectorstore import VectorStoreManager
-from src.graph.project_context import build_project_context
 
 CHAINLIT_NODE_MAP = {
     "classify_intent": classify_intent_node,
     "casual_response": casual_response_node,
     "help_response": help_response_node,
     "reformulate_query": reformulate_query_node,
-    "decompose_query": decompose_query_node,
+    "plan_retrieval": plan_retrieval_node,
     "retrieve": retrieve_node,
     "rerank": rerank_node,
-    "check_relevance": check_relevance_node,
+    "reflect_on_retrieval": reflect_on_retrieval_node,
     "generate": generate_node,
-    "validate_answer": validate_answer_node,
+    "quality_gate": quality_gate_node,
 }
 
 Payload.max_decode_packets = 500
@@ -395,38 +396,22 @@ async def on_message(message: cl.Message):
         all_projects=projects,
         max_projects=20,
     )
+    document_catalog = await metadata.list_documents(project_id)
 
     run_id = str(uuid.uuid4())
 
+    initial_state = build_default_state(
+        question=content,
+        project_id=project_id,
+        collection_name=collection_name,
+        project_context=project_context,
+        chat_history=chat_history,
+        reranked_documents=prior_docs,
+        document_catalog=document_catalog,
+    )
+
     final_state = await rag_graph.ainvoke(
-        {
-            "project_id": project_id,
-            "collection_name": collection_name,
-            "project_context": project_context,
-            "original_question": content,
-            "reformulated_question": content,
-            "question": content,
-            "intent": "",
-            "search_documents": True,
-            "response_style": "default",
-            "chat_history": chat_history,
-            "reuse_prior_docs": False,
-            "retrieval_filters": {},
-            "sub_queries": [],
-            "documents": [],
-            "reranked_documents": prior_docs,
-            "relevance_scores": [],
-            "confidence": "",
-            "generation": "",
-            "source_citations": [],
-            "validation_passed": True,
-            "validation_reason": "",
-            "validation_attempts": 0,
-            "retry_with_strict_grounding": False,
-            "force_retrieval_on_retry": False,
-            "retrieval_log": {},
-            "messages": [],
-        },
+        initial_state,
         config={
             "configurable": {"thread_id": thread_id},
             "run_id": run_id,
