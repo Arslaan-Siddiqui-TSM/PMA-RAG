@@ -19,10 +19,10 @@ Create a new project.
 }
 ```
 
-| Field         | Type   | Required | Constraints                |
-|---------------|--------|----------|----------------------------|
+| Field         | Type   | Required | Constraints                                                         |
+| ------------- | ------ | -------- | ------------------------------------------------------------------- |
 | `name`        | string | yes      | 1–100 chars, trimmed, unique among active projects (case-sensitive) |
-| `description` | string | no       | max 1000 chars, defaults to `""` |
+| `description` | string | no       | max 1000 chars, defaults to `""`                                    |
 
 **Response (201):**
 
@@ -38,9 +38,9 @@ Create a new project.
 
 **Errors:**
 
-| Code | Condition                        |
-|------|----------------------------------|
-| 409  | Project name already exists      |
+| Code | Condition                                     |
+| ---- | --------------------------------------------- |
+| 409  | Project name already exists                   |
 | 422  | Validation error (name too long, empty, etc.) |
 
 ---
@@ -75,11 +75,11 @@ Soft-delete a project. Hard-deletes all associated documents, chunks, threads, c
 
 **Errors:**
 
-| Code | Condition                        |
-|------|----------------------------------|
-| 404  | Project not found                |
-| 410  | Project already deleted           |
-| 422  | Malformed UUID                   |
+| Code | Condition               |
+| ---- | ----------------------- |
+| 404  | Project not found       |
+| 410  | Project already deleted |
+| 422  | Malformed UUID          |
 
 ---
 
@@ -94,7 +94,7 @@ Upload documents to a project.
 **Request:** `multipart/form-data`
 
 | Field        | Type          | Required |
-|--------------|---------------|----------|
+| ------------ | ------------- | -------- |
 | `files`      | file(s)       | yes      |
 | `doc_type`   | string        | yes      |
 | `project_id` | UUID (string) | yes      |
@@ -125,7 +125,7 @@ List documents in a project. Optional `doc_type` query parameter for filtering.
 **Query parameters:**
 
 | Param        | Type   | Required |
-|--------------|--------|----------|
+| ------------ | ------ | -------- |
 | `project_id` | UUID   | yes      |
 | `doc_type`   | string | no       |
 
@@ -177,10 +177,10 @@ Send a question scoped to a project.
 }
 ```
 
-| Field        | Type   | Required | Notes                                           |
-|--------------|--------|----------|-------------------------------------------------|
-| `question`   | string | yes      | min 1 char                                      |
-| `project_id` | UUID   | yes      |                                                 |
+| Field        | Type   | Required | Notes                                                   |
+| ------------ | ------ | -------- | ------------------------------------------------------- |
+| `question`   | string | yes      | min 1 char                                              |
+| `project_id` | UUID   | yes      |                                                         |
 | `thread_id`  | UUID   | no       | Omit to auto-create. Unknown IDs generate a new thread. |
 
 **Extra fields are forbidden.** Sending legacy fields (`doc_type_filter`, `source_file_filter`, `section_filter`) returns `422`.
@@ -255,9 +255,7 @@ List threads for a project, sorted newest first.
 
 ```json
 {
-  "conversations": [
-    { "thread_id": "uuid" }
-  ]
+  "conversations": [{ "thread_id": "uuid" }]
 }
 ```
 
@@ -271,20 +269,20 @@ Delete a conversation thread. Requires `project_id` for safety scoping.
 
 **Errors:**
 
-| Code | Condition                                    |
-|------|----------------------------------------------|
+| Code | Condition                                      |
+| ---- | ---------------------------------------------- |
 | 404  | Thread not found or belongs to another project |
-| 422  | Invalid UUID format                          |
+| 422  | Invalid UUID format                            |
 
 ---
 
 ## Error Semantics
 
-| Code | Meaning                                                |
-|------|--------------------------------------------------------|
-| 404  | Resource not found (also hides cross-project existence) |
-| 409  | Conflict (duplicate name, thread-project mismatch)     |
-| 410  | Resource has been deleted (soft-deleted project)        |
+| Code | Meaning                                                   |
+| ---- | --------------------------------------------------------- |
+| 404  | Resource not found (also hides cross-project existence)   |
+| 409  | Conflict (duplicate name, thread-project mismatch)        |
+| 410  | Resource has been deleted (soft-deleted project)          |
 | 422  | Validation error (malformed UUID, forbidden fields, etc.) |
 
 ---

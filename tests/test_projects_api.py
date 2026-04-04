@@ -205,7 +205,9 @@ class TestThreadProjectBinding:
             json={"project_id": data["id"]},
         )
         assert resp.status_code == 201
-        assert "thread_id" in resp.json()
+        body = resp.json()
+        assert "thread_id" in body
+        assert body["title"] == "New chat"
 
     async def test_list_conversations_requires_project(self, client: AsyncClient):
         resp = await client.get("/api/v1/conversations")
@@ -224,9 +226,12 @@ class TestThreadProjectBinding:
         resp1 = await client.get(
             "/api/v1/conversations", params={"project_id": p1["id"]}
         )
-        tids1 = [c["thread_id"] for c in resp1.json()["conversations"]]
+        data1 = resp1.json()["conversations"]
+        tids1 = [c["thread_id"] for c in data1]
         assert tid1 in tids1
         assert tid2 not in tids1
+        by_id = {c["thread_id"]: c for c in data1}
+        assert by_id[tid1]["title"] == "New chat"
 
     async def test_delete_conversation_cross_project_returns_404(
         self, client: AsyncClient
@@ -279,6 +284,7 @@ class TestThreadProjectBinding:
         assert resp.status_code == 200
         body = resp.json()
         assert body["thread_id"] == tid
+        assert body["title"] == "New chat"
         assert body["messages"] == []
 
     async def test_get_conversation_descending_order(
@@ -298,10 +304,19 @@ class TestThreadProjectBinding:
             params={"project_id": p["id"]},
         )
         assert resp.status_code == 200
-        msgs = resp.json()["messages"]
+        detail = resp.json()
+        msgs = detail["messages"]
         assert len(msgs) == 4
         roles = [m["role"] for m in msgs]
         assert roles == ["ai", "human", "ai", "human"]
         assert "created_at" in msgs[0]
         assert msgs[0]["content"] == "second reply"
         assert msgs[1]["content"] == "second question"
+        assert detail["title"] == "first question"
+
+        listed = await client.get(
+            "/api/v1/conversations", params={"project_id": p["id"]}
+        )
+        assert listed.status_code == 200
+        conv = next(c for c in listed.json()["conversations"] if c["thread_id"] == tid)
+        assert conv["title"] == detail["title"]

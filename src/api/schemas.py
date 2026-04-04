@@ -141,6 +141,7 @@ class ConversationCreateRequest(BaseModel):
 
 class ConversationOut(BaseModel):
     thread_id: str
+    title: str
 
 
 class ConversationListResponse(BaseModel):
@@ -155,4 +156,5 @@ class ConversationMessageOut(BaseModel):
 
 class ConversationDetailResponse(BaseModel):
     thread_id: str
+    title: str
     messages: list[ConversationMessageOut]

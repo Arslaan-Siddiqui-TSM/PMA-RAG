@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -48,6 +49,23 @@ CREATE INDEX IF NOT EXISTS idx_api_feedback_run
 """
 
 MAX_HISTORY_MESSAGES = 20
+
+_DEFAULT_CONVERSATION_TITLE = "New chat"
+_TITLE_WHITESPACE = re.compile(r"\s+")
+
+
+def format_conversation_title(
+    raw: str | None, *, max_len: int = 80, fallback: str = _DEFAULT_CONVERSATION_TITLE
+) -> str:
+    """Derive a short display title from the first human message (or fallback)."""
+    if raw is None:
+        return fallback
+    collapsed = _TITLE_WHITESPACE.sub(" ", raw).strip()
+    if not collapsed:
+        return fallback
+    if len(collapsed) <= max_len:
+        return collapsed
+    return collapsed[: max_len - 1] + "\u2026"
 
 
 class ChatStore:
@@ -128,6 +146,48 @@ class ChatStore:
                 "content": row["content"],
                 "created_at": row["created_at"],
             }
+            for row in rows
+        ]
+
+    async def get_first_human_message_content(self, thread_id: str) -> str | None:
+        async with self._pool.connection() as conn:
+            result = await conn.execute(
+                """
+                SELECT content FROM chat_messages
+                WHERE thread_id = %s AND role = 'human'
+                ORDER BY created_at ASC, id ASC
+                LIMIT 1
+                """,
+                (thread_id,),
+            )
+            row = await result.fetchone()
+        return row["content"] if row else None
+
+    async def list_conversation_summaries(
+        self, project_id: str
+    ) -> list[tuple[str, str]]:
+        """Return (thread_id, title) for all threads in the project, newest thread first."""
+        async with self._pool.connection() as conn:
+            result = await conn.execute(
+                """
+                SELECT t.thread_id::text AS thread_id, fm.content AS first_human_content
+                FROM threads t
+                LEFT JOIN LATERAL (
+                    SELECT m.content
+                    FROM chat_messages m
+                    WHERE m.thread_id = t.thread_id::text AND m.role = 'human'
+                    ORDER BY m.created_at ASC, m.id ASC
+                    LIMIT 1
+                ) fm ON true
+                WHERE t.project_id = %s
+                ORDER BY t.created_at DESC
+                """,
+                (project_id,),
+            )
+            rows = await result.fetchall()
+
+        return [
+            (row["thread_id"], format_conversation_title(row["first_human_content"]))
             for row in rows
         ]
 

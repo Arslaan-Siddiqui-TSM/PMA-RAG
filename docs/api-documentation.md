@@ -12,17 +12,21 @@
 ## 1) Health Check
 
 ### Endpoint
+
 - **Method:** `GET`
 - **Path:** `/health`
 - **Description:** Checks whether the API service is up.
 
 ### Params
+
 - None
 
 ### Request Schema
+
 - None
 
 ### Response Schema
+
 ```json
 {
   "status": "string"
@@ -30,6 +34,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "status": "ok"
@@ -41,14 +46,17 @@
 ## 2) Chat Completion
 
 ### Endpoint
+
 - **Method:** `POST`
 - **Path:** `/api/v1/chat`
 - **Description:** Sends a user question to the RAG graph and returns a grounded answer with citations.
 
 ### Params
+
 - **Body:** `question` (required), `thread_id` (optional), `doc_type_filter` (optional), `source_file_filter` (optional), `section_filter` (optional)
 
 ### Request Schema
+
 ```json
 {
   "question": "string (min length: 1)",
@@ -60,6 +68,7 @@
 ```
 
 ### Response Schema
+
 ```json
 {
   "answer": "string",
@@ -84,6 +93,7 @@
 ```
 
 ### Example Request Payload
+
 ```json
 {
   "question": "Summarize the BRD scope for user onboarding.",
@@ -95,6 +105,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "answer": "The BRD defines onboarding as ...",
@@ -123,14 +134,17 @@
 ## 3) Streaming Chat
 
 ### Endpoint
+
 - **Method:** `POST`
 - **Path:** `/api/v1/chat/stream`
 - **Description:** Streams answer generation and intermediate metadata as SSE events.
 
 ### Params
+
 - **Body:** same as `/api/v1/chat`
 
 ### Request Schema
+
 ```json
 {
   "question": "string (min length: 1)",
@@ -142,6 +156,7 @@
 ```
 
 ### Response Schema
+
 - **Content-Type:** `text/event-stream`
 - **SSE Events emitted:**
   - `thread_id`: `{"thread_id":"string","run_id":"string"}`
@@ -151,6 +166,7 @@
   - `done`: same payload shape as `ChatResponse`
 
 ### Example Request Payload
+
 ```json
 {
   "question": "What are the acceptance criteria in the test plan?",
@@ -162,6 +178,7 @@
 ```
 
 ### Example Final (`done`) Event Payload
+
 ```json
 {
   "answer": "The acceptance criteria include ...",
@@ -181,14 +198,17 @@
 ## 4) Feedback Submission
 
 ### Endpoint
+
 - **Method:** `POST`
 - **Path:** `/api/v1/feedback`
 - **Description:** Stores user feedback for a specific run.
 
 ### Params
+
 - **Body:** `thread_id` (required), `run_id` (required), `score` (required, `0.0-1.0`), `comment` (optional)
 
 ### Request Schema
+
 ```json
 {
   "thread_id": "string",
@@ -199,6 +219,7 @@
 ```
 
 ### Response Schema
+
 ```json
 {
   "id": "number",
@@ -207,6 +228,7 @@
 ```
 
 ### Example Request Payload
+
 ```json
 {
   "thread_id": "f6e9ef17-56dd-4bd7-a74d-6c2d2b8a4c77",
@@ -217,6 +239,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "id": 42,
@@ -229,16 +252,19 @@
 ## 5) Upload Documents
 
 ### Endpoint
+
 - **Method:** `POST`
 - **Path:** `/api/v1/documents/upload`
 - **Description:** Uploads one or more files and ingests them into metadata, vector, and BM25 stores.
 
 ### Params
+
 - **Form Data:** `files` (required, list of files), `doc_type` (required)
 - **Allowed file extensions:** `.pdf`, `.docx`, `.md`
 - **Allowed `doc_type` values:** `PRD`, `BRD`, `Technical Spec`, `Test Plan`, `Use Case`, `Functional Spec`, `Non-Functional Spec`, `Other`
 
 ### Request Schema
+
 ```json
 {
   "files": ["binary file", "binary file", "..."],
@@ -247,6 +273,7 @@
 ```
 
 ### Response Schema
+
 ```json
 {
   "results": [
@@ -263,6 +290,7 @@
 ```
 
 ### Example Request Payload
+
 ```json
 {
   "files": ["Onboarding-BRD.pdf", "Payments-PRD.docx"],
@@ -271,6 +299,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "results": [
@@ -291,17 +320,21 @@
 ## 6) List Documents
 
 ### Endpoint
+
 - **Method:** `GET`
 - **Path:** `/api/v1/documents`
 - **Description:** Returns all ingested document metadata.
 
 ### Params
+
 - None
 
 ### Request Schema
+
 - None
 
 ### Response Schema
+
 ```json
 [
   {
@@ -315,6 +348,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 [
   {
@@ -332,17 +366,21 @@
 ## 7) Get Document By ID
 
 ### Endpoint
+
 - **Method:** `GET`
 - **Path:** `/api/v1/documents/{doc_id}`
 - **Description:** Returns detailed metadata for one document.
 
 ### Params
+
 - **Path:** `doc_id` (integer, required)
 
 ### Request Schema
+
 - None
 
 ### Response Schema
+
 ```json
 {
   "id": "number",
@@ -355,6 +393,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "id": 7,
@@ -371,17 +410,21 @@
 ## 8) Delete Document By ID
 
 ### Endpoint
+
 - **Method:** `DELETE`
 - **Path:** `/api/v1/documents/{doc_id}`
 - **Description:** Deletes a document from metadata, vector index, and BM25 index.
 
 ### Params
+
 - **Path:** `doc_id` (integer, required)
 
 ### Request Schema
+
 - None
 
 ### Response Schema
+
 ```json
 {
   "id": "number",
@@ -391,6 +434,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "id": 7,
@@ -404,17 +448,21 @@
 ## 9) Get Available Document Types
 
 ### Endpoint
+
 - **Method:** `GET`
 - **Path:** `/api/v1/doc-types`
 - **Description:** Returns all document types currently available in metadata.
 
 ### Params
+
 - None
 
 ### Request Schema
+
 - None
 
 ### Response Schema
+
 ```json
 {
   "doc_types": ["string", "..."]
@@ -422,6 +470,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "doc_types": ["BRD", "PRD", "Test Plan"]
@@ -433,17 +482,21 @@
 ## 10) Create Conversation
 
 ### Endpoint
+
 - **Method:** `POST`
 - **Path:** `/api/v1/conversations`
 - **Description:** Creates a new conversation thread ID.
 
 ### Params
+
 - None
 
 ### Request Schema
+
 - None
 
 ### Response Schema
+
 ```json
 {
   "thread_id": "string"
@@ -451,6 +504,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "thread_id": "2da4dd28-12c5-4f4b-a825-e8f2db0522ea"
@@ -462,17 +516,21 @@
 ## 11) List Conversations
 
 ### Endpoint
+
 - **Method:** `GET`
 - **Path:** `/api/v1/conversations`
 - **Description:** Lists distinct conversation threads found in checkpoints.
 
 ### Params
+
 - None
 
 ### Request Schema
+
 - None
 
 ### Response Schema
+
 ```json
 {
   "conversations": [
@@ -484,6 +542,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "conversations": [
@@ -502,17 +561,21 @@
 ## 12) Delete Conversation
 
 ### Endpoint
+
 - **Method:** `DELETE`
 - **Path:** `/api/v1/conversations/{thread_id}`
 - **Description:** Deletes all stored checkpoint/chat data for a conversation thread.
 
 ### Params
+
 - **Path:** `thread_id` (string UUID, required)
 
 ### Request Schema
+
 - None
 
 ### Response Schema
+
 ```json
 {
   "thread_id": "string",
@@ -521,6 +584,7 @@
 ```
 
 ### Example Response Payload
+
 ```json
 {
   "thread_id": "2da4dd28-12c5-4f4b-a825-e8f2db0522ea",

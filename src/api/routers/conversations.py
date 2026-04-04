@@ -16,7 +16,10 @@ from src.api.schemas import (
     ConversationMessageOut,
     ConversationOut,
 )
-from src.db.chat_store import MAX_HISTORY_MESSAGES
+from src.db.chat_store import (
+    MAX_HISTORY_MESSAGES,
+    format_conversation_title,
+)
 from src.db.postgres import delete_thread_checkpoints
 
 router = APIRouter(tags=["conversations"])
@@ -34,7 +37,7 @@ async def create_conversation(
 
     thread_id = str(uuid.uuid4())
     await components.metadata_store.create_thread(thread_id, pid)
-    return ConversationOut(thread_id=thread_id)
+    return ConversationOut(thread_id=thread_id, title="New chat")
 
 
 @router.get("/conversations", response_model=ConversationListResponse)
@@ -47,8 +50,10 @@ async def list_conversations(
     pid = str(project_id)
     await require_active_project(pid, components)
 
-    thread_ids = await components.metadata_store.list_threads(pid)
-    conversations = [ConversationOut(thread_id=tid) for tid in thread_ids]
+    summaries = await components.chat_store.list_conversation_summaries(pid)
+    conversations = [
+        ConversationOut(thread_id=tid, title=title) for tid, title in summaries
+    ]
     return ConversationListResponse(conversations=conversations)
 
 
@@ -90,7 +95,11 @@ async def get_conversation(
         )
         for r in rows
     ]
-    return ConversationDetailResponse(thread_id=thread_id, messages=messages)
+    first_human = await components.chat_store.get_first_human_message_content(thread_id)
+    title = format_conversation_title(first_human)
+    return ConversationDetailResponse(
+        thread_id=thread_id, title=title, messages=messages
+    )
 
 
 @router.delete("/conversations/{thread_id}", status_code=204)
