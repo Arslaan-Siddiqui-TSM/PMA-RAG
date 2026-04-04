@@ -1,21 +1,16 @@
 import asyncio
 import sys
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from src.api.app import app
 from src.api.dependencies import init_components, shutdown_components
 
-
-@pytest.fixture(scope="session")
-def event_loop():
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+# Psycopg async cannot use Windows' default ProactorEventLoop; set policy before any
+# event loop exists (pytest-asyncio 1.x may ignore a custom event_loop fixture).
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 @pytest_asyncio.fixture(scope="session")

@@ -418,9 +418,7 @@ def main() -> None:
     parser.add_argument(
         "--heuristic", action="store_true", help="Run heuristic-only eval"
     )
-    parser.add_argument(
-        "--rag", action="store_true", help="Run full RAG pipeline eval"
-    )
+    parser.add_argument("--rag", action="store_true", help="Run full RAG pipeline eval")
     args = parser.parse_args()
 
     if not any([args.upload, args.intent, args.heuristic, args.rag]):

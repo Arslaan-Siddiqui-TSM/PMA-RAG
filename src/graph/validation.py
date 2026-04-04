@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import re
 import logging
+import re
 
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langsmith import traceable
@@ -20,13 +20,18 @@ def parse_quality_gate(raw: str) -> dict:
     try:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
+
             def _yn(val: object) -> bool:
                 return str(val).lower() in {"yes", "true", "1", "pass"}
 
             grounded = _yn(parsed.get("grounded", parsed.get("GROUNDED", "no")))
             coverage = _yn(parsed.get("coverage", parsed.get("COVERAGE", "no")))
-            completeness = _yn(parsed.get("completeness", parsed.get("COMPLETENESS", "no")))
-            hallucination = _yn(parsed.get("hallucination", parsed.get("HALLUCINATION", "no")))
+            completeness = _yn(
+                parsed.get("completeness", parsed.get("COMPLETENESS", "no"))
+            )
+            hallucination = _yn(
+                parsed.get("hallucination", parsed.get("HALLUCINATION", "no"))
+            )
             diagnosis = str(
                 parsed.get("diagnosis", parsed.get("DIAGNOSIS", "none"))
             ).lower()

@@ -46,6 +46,10 @@ test = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Session-scoped async fixtures (components, client) must share one loop; on Windows that
+# loop must be Selector-based for psycopg (see tests/conftest.py policy).
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 markers = [
     "eval: LangSmith-backed evaluation tests (require API key and uploaded datasets)",
 ]

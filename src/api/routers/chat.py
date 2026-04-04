@@ -243,10 +243,12 @@ async def chat_stream(
                 sufficient = output.get("retrieval_sufficient", True)
                 yield {
                     "event": "retrieval_status",
-                    "data": json.dumps({
-                        "retrieval_sufficient": sufficient,
-                        "confidence": output.get("confidence", ""),
-                    }),
+                    "data": json.dumps(
+                        {
+                            "retrieval_sufficient": sufficient,
+                            "confidence": output.get("confidence", ""),
+                        }
+                    ),
                 }
 
             elif kind == "on_chat_model_stream":

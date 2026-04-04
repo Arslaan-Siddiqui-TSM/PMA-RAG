@@ -7,8 +7,6 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from config import settings
-
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.api_rate_limit])
 from src.db.chat_store import ChatStore
 from src.db.metadata import MetadataStore
 from src.db.postgres import get_pool
@@ -16,6 +14,8 @@ from src.graph.builder import compile_graph
 from src.graph.nodes import set_retrieval_components
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.vectorstore import VectorStoreManager
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[settings.api_rate_limit])
 
 os.environ.setdefault("NVIDIA_API_KEY", settings.nvidia_api_key)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from typing import Any
 
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -46,7 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_api_feedback_run
     ON api_feedback (run_id);
 """
 
-MAX_HISTORY_MESSAGES = 10
+MAX_HISTORY_MESSAGES = 20
 
 
 class ChatStore:
@@ -103,6 +104,32 @@ class ChatStore:
             else:
                 messages.append(AIMessage(content=row["content"]))
         return messages
+
+    async def list_messages_descending(
+        self, thread_id: str, *, limit: int = MAX_HISTORY_MESSAGES
+    ) -> list[dict[str, Any]]:
+        """Newest messages first (for API transcript)."""
+        async with self._pool.connection() as conn:
+            result = await conn.execute(
+                """
+                SELECT role, content, created_at
+                FROM chat_messages
+                WHERE thread_id = %s
+                ORDER BY created_at DESC, id DESC
+                LIMIT %s
+                """,
+                (thread_id, limit),
+            )
+            rows = await result.fetchall()
+
+        return [
+            {
+                "role": row["role"],
+                "content": row["content"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
 
     # ------------------------------------------------------------------
     # Reranked documents

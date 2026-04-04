@@ -337,9 +337,7 @@ async def retrieve_node(state: RAGState) -> dict:
             fts_k=fts_k,
         )
 
-    docs_per_query = list(
-        await asyncio.gather(*[_run_one(q) for q in sub_queries])
-    )
+    docs_per_query = list(await asyncio.gather(*[_run_one(q) for q in sub_queries]))
 
     if len(docs_per_query) == 1:
         merged = docs_per_query[0]
@@ -441,7 +439,8 @@ def _select_context_documents(
 
     if threshold > 0:
         above = [
-            d for d in deduped
+            d
+            for d in deduped
             if float(d.metadata.get("relevance_score", 0.0)) >= threshold
         ]
         candidates = above if above else deduped

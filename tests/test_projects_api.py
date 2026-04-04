@@ -11,6 +11,8 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from src.api.dependencies import AppComponents
+
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
@@ -240,3 +242,66 @@ class TestThreadProjectBinding:
             params={"project_id": p2["id"]},
         )
         assert resp.status_code == 404
+
+    async def test_get_conversation_requires_project(self, client: AsyncClient):
+        resp = await client.get(f"/api/v1/conversations/{uuid.uuid4()}")
+        assert resp.status_code == 422
+
+    async def test_get_conversation_unknown_thread_404(self, client: AsyncClient):
+        p = await _create_project(client, f"ConvGet-{uuid.uuid4().hex[:8]}")
+        resp = await client.get(
+            f"/api/v1/conversations/{uuid.uuid4()}",
+            params={"project_id": p["id"]},
+        )
+        assert resp.status_code == 404
+
+    async def test_get_conversation_cross_project_returns_404(
+        self, client: AsyncClient
+    ):
+        p1 = await _create_project(client, f"ConvGet1-{uuid.uuid4().hex[:8]}")
+        p2 = await _create_project(client, f"ConvGet2-{uuid.uuid4().hex[:8]}")
+        r = await client.post("/api/v1/conversations", json={"project_id": p1["id"]})
+        tid = r.json()["thread_id"]
+        resp = await client.get(
+            f"/api/v1/conversations/{tid}",
+            params={"project_id": p2["id"]},
+        )
+        assert resp.status_code == 404
+
+    async def test_get_conversation_empty_messages(self, client: AsyncClient):
+        p = await _create_project(client, f"ConvEmpty-{uuid.uuid4().hex[:8]}")
+        r = await client.post("/api/v1/conversations", json={"project_id": p["id"]})
+        tid = r.json()["thread_id"]
+        resp = await client.get(
+            f"/api/v1/conversations/{tid}",
+            params={"project_id": p["id"]},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["thread_id"] == tid
+        assert body["messages"] == []
+
+    async def test_get_conversation_descending_order(
+        self, client: AsyncClient, components: AppComponents
+    ):
+        p = await _create_project(client, f"ConvOrder-{uuid.uuid4().hex[:8]}")
+        r = await client.post("/api/v1/conversations", json={"project_id": p["id"]})
+        tid = r.json()["thread_id"]
+        await components.chat_store.append_messages(
+            tid, "first question", "first reply"
+        )
+        await components.chat_store.append_messages(
+            tid, "second question", "second reply"
+        )
+        resp = await client.get(
+            f"/api/v1/conversations/{tid}",
+            params={"project_id": p["id"]},
+        )
+        assert resp.status_code == 200
+        msgs = resp.json()["messages"]
+        assert len(msgs) == 4
+        roles = [m["role"] for m in msgs]
+        assert roles == ["ai", "human", "ai", "human"]
+        assert "created_at" in msgs[0]
+        assert msgs[0]["content"] == "second reply"
+        assert msgs[1]["content"] == "second question"

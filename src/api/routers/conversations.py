@@ -11,9 +11,12 @@ from src.api.dependencies import (
 )
 from src.api.schemas import (
     ConversationCreateRequest,
+    ConversationDetailResponse,
     ConversationListResponse,
+    ConversationMessageOut,
     ConversationOut,
 )
+from src.db.chat_store import MAX_HISTORY_MESSAGES
 from src.db.postgres import delete_thread_checkpoints
 
 router = APIRouter(tags=["conversations"])
@@ -47,6 +50,47 @@ async def list_conversations(
     thread_ids = await components.metadata_store.list_threads(pid)
     conversations = [ConversationOut(thread_id=tid) for tid in thread_ids]
     return ConversationListResponse(conversations=conversations)
+
+
+@router.get(
+    "/conversations/{thread_id}",
+    response_model=ConversationDetailResponse,
+)
+async def get_conversation(
+    thread_id: str,
+    project_id: UUID = Query(...),
+    limit: int = Query(
+        MAX_HISTORY_MESSAGES,
+        ge=1,
+        le=200,
+        description="Max messages to return, newest first.",
+    ),
+    components: AppComponents = Depends(get_components),
+):
+    pid = str(project_id)
+    await require_active_project(pid, components)
+
+    try:
+        uuid.UUID(thread_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="thread_id must be a valid UUID")
+
+    bound_project = await components.metadata_store.get_thread_project_id(thread_id)
+    if bound_project is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if bound_project != pid:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    rows = await components.chat_store.list_messages_descending(thread_id, limit=limit)
+    messages = [
+        ConversationMessageOut(
+            role=r["role"],
+            content=r["content"],
+            created_at=r["created_at"],
+        )
+        for r in rows
+    ]
+    return ConversationDetailResponse(thread_id=thread_id, messages=messages)
 
 
 @router.delete("/conversations/{thread_id}", status_code=204)

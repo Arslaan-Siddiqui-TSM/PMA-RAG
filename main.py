@@ -100,9 +100,7 @@ async def _get_components():
     return _vectorstore_manager, _bm25_index, _metadata_store
 
 
-async def _get_or_create_collection_name(
-    metadata: MetadataStore, project: dict
-) -> str:
+async def _get_or_create_collection_name(metadata: MetadataStore, project: dict) -> str:
     collection_name = str(project.get("collection_name") or "").strip()
     if collection_name:
         return collection_name
@@ -151,7 +149,9 @@ async def on_chat_start():
     await cl.ChatSettings(chat_settings).send()
 
     first_project = projects[0]
-    first_collection_name = await _get_or_create_collection_name(metadata, first_project)
+    first_collection_name = await _get_or_create_collection_name(
+        metadata, first_project
+    )
     cl.user_session.set("project_id", str(first_project["id"]))
     cl.user_session.set("collection_name", first_collection_name)
 

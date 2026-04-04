@@ -36,6 +36,4 @@ async def delete_thread_checkpoints(thread_id: str) -> None:
         await conn.execute(
             "DELETE FROM checkpoint_blobs WHERE thread_id = %s", (thread_id,)
         )
-        await conn.execute(
-            "DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,)
-        )
+        await conn.execute("DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,))

@@ -145,3 +145,14 @@ class ConversationOut(BaseModel):
 
 class ConversationListResponse(BaseModel):
     conversations: list[ConversationOut]
+
+
+class ConversationMessageOut(BaseModel):
+    role: str
+    content: str
+    created_at: datetime
+
+
+class ConversationDetailResponse(BaseModel):
+    thread_id: str
+    messages: list[ConversationMessageOut]

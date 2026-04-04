@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 class VectorStoreManager:
     def __init__(self) -> None:
-        self._embeddings = NVIDIAEmbeddings(model=settings.embedding_model, truncate="NONE")
+        self._embeddings = NVIDIAEmbeddings(
+            model=settings.embedding_model, truncate="NONE"
+        )
         self._chroma_client = chromadb.CloudClient(
             tenant=settings.chroma_tenant,
             database=settings.chroma_database,
